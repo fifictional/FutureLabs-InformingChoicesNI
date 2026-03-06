@@ -8,3 +8,8 @@ class Question(models.Model):
     text = models.TextField()
     type = models.CharField(max_length=50)
     metadata = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["form", "external_id"], name="unique_question_per_form")
+        ]

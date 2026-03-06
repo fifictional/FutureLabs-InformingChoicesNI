@@ -21,6 +21,8 @@
     <WebBrowserUrl>http://localhost</WebBrowserUrl>
     <OutputPath>.</OutputPath>
     <SuppressCollectPythonCloudServiceFiles>true</SuppressCollectPythonCloudServiceFiles>
+    <PythonRunWebServerCommandArguments>runserver --settings $(DjangoSettingsModule) %SERVER_PORT% $(CommandLineArguments)</PythonRunWebServerCommandArguments>
+    <PythonDebugWebServerCommandArguments>runserver --noreload --settings $(DjangoSettingsModule) %SERVER_PORT% $(CommandLineArguments)</PythonDebugWebServerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -31,6 +33,12 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="InformingChoicesBackend\core\google\forms_service.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="InformingChoicesBackend\core\google\forms_interface.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="InformingChoicesBackend\core\pagination.py">
       <SubType>Code</SubType>
     </Compile>
@@ -81,6 +89,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="InformingChoicesBackend\" />
+    <Folder Include="InformingChoicesBackend\core\google\" />
     <Folder Include="InformingChoicesBackend\models\" />
     <Folder Include="InformingChoicesBackend\core\" />
     <Folder Include="InformingChoicesBackend\views\" />

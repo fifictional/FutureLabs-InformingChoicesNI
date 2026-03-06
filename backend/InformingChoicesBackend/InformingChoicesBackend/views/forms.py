@@ -1,14 +1,15 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
 
+from InformingChoicesBackend.core.google.forms_service import get_forms_service
+
 class FormsViewSet(viewsets.ViewSet):
     # we need a forms manager that can handle the interactions with google forms api
     # the idea is that we can 
 
     def list(self, request):
-        # get a list of available forms, 
-        # should be queryable and filterable and sortable
-        pass
+        service = get_forms_service()
+        return Response({"message": "Forms endpoint is working"});
 
     def create(self, request):
         # create a new form on Google forms, and add it to the database
