@@ -1,3 +1,6 @@
+"""
+Provides an interface for accessing the Forms service.
+"""
 
 from InformingChoicesBackend.core.google.forms_service import get_forms_service
 
