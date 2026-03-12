@@ -1,3 +1,7 @@
+"""
+Django settings.
+"""
+
 import os
 import posixpath
 

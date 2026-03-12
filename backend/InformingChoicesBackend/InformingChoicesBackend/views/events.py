@@ -4,13 +4,19 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from InformingChoicesBackend.models import Event
-from InformingChoicesBackend.models.event_tag import EventTag
+from InformingChoicesBackend.models.EventTag import EventTag
 from InformingChoicesBackend.serializers import EventSerializer
 
 class EventsViewSet(viewsets.GenericViewSet):
     def list(self, request):
+        """
+        Lists all events that match the query parameters given by the request.
+        :param request: The request object containing the query parameters.
+        :return: A response containing the list of events.
+        """
         try:
             queryset = Event.objects.all().prefetch_related("tags")
+
             params = request.query_params
             name = params.get("name")
             description = params.get("description")
@@ -18,9 +24,14 @@ class EventsViewSet(viewsets.GenericViewSet):
             search = params.get("search")
             ordering = params.get("ordering")
 
-            allowed_fields = ["name", "-name"]
+            # Construct query set according to given query parameters
 
-            if ordering in allowed_fields:
+            allowed_ordering_options = [
+                "name",  # Alphabetical order by name
+                "-name"  # Reverse alphabetical order by name
+            ]
+
+            if ordering in allowed_ordering_options:
                 queryset = queryset.order_by(ordering)
 
             if search:
@@ -40,16 +51,23 @@ class EventsViewSet(viewsets.GenericViewSet):
             queryset = queryset.distinct()
             page = self.paginate_queryset(queryset)
 
+            # If pagination is necessary, serialise the page data
             if page is not None:
                 serializer = EventSerializer(page, many=True)
                 return self.get_paginated_response(serializer.data)
 
+            # Serialise the available data
             serializer = EventSerializer(queryset, many=True)
             return Response(serializer.data)
         except Exception as e:
             return Response({"unexpected_error" : f"Error listing events: {str(e)}"}, status=500)
 
     def create(self, request):
+        """
+        Creates a new event.
+        :param request: The request object containing the event data.
+        :return: A response containing the created event.
+        """
         try:
             serializer = EventSerializer(data=request.data)
 
@@ -64,6 +82,12 @@ class EventsViewSet(viewsets.GenericViewSet):
             return Response({"unexpected_error" : f"Error creating event: {str(e)}"}, status=500)
 
     def retrieve(self, request, pk=None):
+        """
+        Retrieve an event by its primary key.
+        :param request: The request object.
+        :param pk: The primary key of the event to retrieve.
+        :return: A response containing the event data.
+        """
         try:
             event = Event.objects.prefetch_related("tags").get(pk=pk)
             serializer = EventSerializer(event)
@@ -74,13 +98,24 @@ class EventsViewSet(viewsets.GenericViewSet):
             return Response({"unexpected_error" : f"Error retrieving event: {str(e)}"}, status=500)
 
     def update(self, request, pk=None):
+        """
+        Updates an event, as specified by the request data.
+        :param request: The request object containing the updated event data.
+        :param pk: The primary key of the event to update.
+        :return: A response containing the updated event data.
+        """
         try:
+            # Retrieve event by primary key
             event = Event.objects.get(pk=pk)
+
+            # If the request specifies a field, update that field of the event correspondingly
             event.name = request.data.get("name", event.name)
             event.description = request.data.get("description", event.description)
             event.project_id = request.data.get("project_id", event.project_id)
+
             event.full_clean()
             event.save()
+
             serializer = EventSerializer(event)
             return Response(serializer.data)
         except Event.DoesNotExist:
@@ -91,6 +126,12 @@ class EventsViewSet(viewsets.GenericViewSet):
             return Response({"unexpected_error" : f"Error updating event: {str(e)}"}, status=500)
 
     def partial_update(self, request, pk=None):
+        """
+        Partially updates an event, as specified by the request data.
+        :param request: The request object containing the updated event data.
+        :param pk: The primary key of the event to update.
+        :return: A response containing the updated event data.
+        """
         try:
             event = Event.objects.get(pk=pk)
             if "name" in request.data:
@@ -110,8 +151,13 @@ class EventsViewSet(viewsets.GenericViewSet):
         except Exception as e:
             return Response({"unexpected_error" : f"Error updating event: {str(e)}"}, status=500)
 
-
     def destroy(self, request, pk=None):
+        """
+        Removes an event from the database.
+        :param request: The request object.
+        :param pk: The primary key of the event to delete.
+        :return: A response indicating success or failure.
+        """
         deleted, _ = Event.objects.filter(pk=pk).delete()
         if deleted == 0:
             return Response({"error": "Event not found"}, status=404)
@@ -120,13 +166,21 @@ class EventsViewSet(viewsets.GenericViewSet):
     # Tags
     @action(detail=True, methods=["post", "delete"], url_name="tags", url_path="tags")
     def add_tags(self, request, pk=None):
+        """
+        Add or remove tags from an event.
+        :param request: A POST or DELETE request.
+        :param pk: The primary key of the event.
+        :return: A response indicating success or failure.
+        """
         try:
+            # Retrieve tag slugs currently associated with the event
             event = Event.objects.prefetch_related("tags").get(pk=pk)
             tag_slugs = request.data.get("tags", [])
 
             if isinstance(tag_slugs, str):
                 tag_slugs = tag_slugs.split(",")
 
+            # Verify that the tags to add/remove correspond to existing tags in the database
             tags = EventTag.objects.filter(slug__in=tag_slugs)
             if not tags.exists():
                 return Response({"error": "No valid tags found"}, status=400)

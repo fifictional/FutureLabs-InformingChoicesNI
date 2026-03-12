@@ -1,6 +1,12 @@
+"""
+Represents a form submission.
+
+Each form submission consists of a set of responses to questions in the form.
+"""
+
 from django.db import models
 
-from InformingChoicesBackend.models.form import Form
+from InformingChoicesBackend.models.Form import Form
 
 class Submission(models.Model):
     form = models.ForeignKey(Form, 

@@ -1,6 +1,10 @@
+"""
+Represents a question in a form.
+"""
+
 from django.db import models
 
-from InformingChoicesBackend.models.form import Form
+from InformingChoicesBackend.models.Form import Form
 
 class Question(models.Model):
     form = models.ForeignKey(Form, on_delete=models.CASCADE)

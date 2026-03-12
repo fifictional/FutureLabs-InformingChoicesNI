@@ -1,7 +1,7 @@
 from django.utils.text import slugify
 from rest_framework import viewsets
 
-from InformingChoicesBackend.models.event_tag import EventTag
+from InformingChoicesBackend.models.EventTag import EventTag
 from InformingChoicesBackend.serializers import EventTagSerializer
 
 class EventTagViewSet(viewsets.ModelViewSet):
