@@ -1,9 +1,9 @@
-import { getDb } from '../client'
-import { submissions } from '../schema'
-import { eq } from 'drizzle-orm'
+import { getDb } from '../client';
+import { submissions } from '../schema';
+import { eq } from 'drizzle-orm';
 
 export async function listSubmissionsByForm(formId) {
-  return getDb().select().from(submissions).where(eq(submissions.formId, formId))
+  return getDb().select().from(submissions).where(eq(submissions.formId, formId));
 }
 
 export async function createSubmission(data) {
@@ -14,9 +14,9 @@ export async function createSubmission(data) {
       submittedAt: data.submittedAt,
       externalId: data.externalId
     })
-    .returning()
+    .returning();
 }
 
 export async function deleteSubmission(id) {
-  return getDb().delete(submissions).where(eq(submissions.id, id)).returning()
+  return getDb().delete(submissions).where(eq(submissions.id, id)).returning();
 }

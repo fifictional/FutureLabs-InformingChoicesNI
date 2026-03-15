@@ -1,9 +1,9 @@
-import { getDb } from '../client'
-import { responses } from '../schema'
-import { eq } from 'drizzle-orm'
+import { getDb } from '../client';
+import { responses } from '../schema';
+import { eq } from 'drizzle-orm';
 
 export async function listResponsesBySubmission(submissionId) {
-  return getDb().select().from(responses).where(eq(responses.submissionId, submissionId))
+  return getDb().select().from(responses).where(eq(responses.submissionId, submissionId));
 }
 
 export async function upsertResponse(data) {
@@ -24,9 +24,9 @@ export async function upsertResponse(data) {
         valueChoice: data.valueChoice ?? null
       }
     })
-    .returning()
+    .returning();
 }
 
 export async function deleteResponse(id) {
-  return getDb().delete(responses).where(eq(responses.id, id)).returning()
+  return getDb().delete(responses).where(eq(responses.id, id)).returning();
 }

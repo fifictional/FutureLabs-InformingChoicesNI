@@ -1,5 +1,5 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron';
+import { electronAPI } from '@electron-toolkit/preload';
 
 // APIs for renderer
 const api = {
@@ -40,7 +40,7 @@ const api = {
     upsert: (data) => ipcRenderer.invoke('responses:upsert', data),
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
   }
-}
+};
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

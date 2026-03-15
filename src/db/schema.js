@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Define the SQL database schema using Drizzle ORM's SQLite adapter
 
@@ -6,13 +6,13 @@ export const events = sqliteTable('events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
   description: text('description')
-})
+});
 
 export const eventTags = sqliteTable('event_tags', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
   slug: text('slug').notNull().unique()
-})
+});
 
 export const eventTagMappings = sqliteTable(
   'event_tag_mappings',
@@ -26,7 +26,7 @@ export const eventTagMappings = sqliteTable(
       .references(() => eventTags.id, { onDelete: 'cascade' })
   },
   (table) => [uniqueIndex('unique_event_tag_mapping').on(table.eventId, table.tagId)]
-)
+);
 
 export const forms = sqliteTable('forms', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -38,14 +38,14 @@ export const forms = sqliteTable('forms', {
     .notNull()
     .references(() => events.id, { onDelete: 'cascade' }),
   schema: text('schema')
-})
+});
 
 export const questions = sqliteTable('questions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   formId: integer('form_id')
     .notNull()
     .references(() => forms.id, { onDelete: 'cascade' })
-})
+});
 
 export const submissions = sqliteTable(
   'submissions',
@@ -58,7 +58,7 @@ export const submissions = sqliteTable(
     externalId: text('external_id').notNull()
   },
   (table) => [uniqueIndex('unique_submission_per_form').on(table.formId, table.externalId)]
-)
+);
 
 export const responses = sqliteTable(
   'responses',
@@ -80,4 +80,4 @@ export const responses = sqliteTable(
       table.questionId
     )
   ]
-)
+);
