@@ -2,8 +2,6 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
-import { getGoogleAuthClient } from './common/google-forms/google-auth-client';
-import { getGoogleFormById } from './common/google-forms/google-forms';
 
 function createWindow() {
   // Create the browser window.
