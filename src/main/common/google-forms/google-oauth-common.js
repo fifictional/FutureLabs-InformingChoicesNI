@@ -5,52 +5,42 @@ import http from 'http';
 import { URL } from 'url';
 import { OAuth2Client } from 'google-auth-library';
 import { getCredentials } from './credential-store';
-import { getSetting, SETTINGS_KEYS } from '../settings/settings';
-
-const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
-
-function getTokenFilePath() {
-  const tokenRelativePath = getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH);
-  if (!tokenRelativePath) {
-    throw new Error('Google encrypted token path is not set');
-  }
-
-  return path.join(app.getPath('userData'), tokenRelativePath);
-}
 
 function ensureParentDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function saveGoogleToken(tokenObject) {
+export function saveEncryptedToken(tokenFilePath, tokenObject) {
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('Encryption is not available on this system');
   }
 
-  const tokenFile = getTokenFilePath();
-  ensureParentDir(tokenFile);
+  ensureParentDir(tokenFilePath);
 
   const json = JSON.stringify(tokenObject);
   const encrypted = safeStorage.encryptString(json);
-  fs.writeFileSync(tokenFile, encrypted);
+  fs.writeFileSync(tokenFilePath, encrypted);
 }
 
-function readSavedGoogleToken() {
+export function readEncryptedToken(tokenFilePath) {
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('Encryption is not available on this system');
   }
 
-  const tokenFile = getTokenFilePath();
-  if (!fs.existsSync(tokenFile)) {
+  if (!fs.existsSync(tokenFilePath)) {
     return null;
   }
 
-  const encrypted = fs.readFileSync(tokenFile);
+  const encrypted = fs.readFileSync(tokenFilePath);
   const json = safeStorage.decryptString(encrypted);
   return JSON.parse(json);
 }
 
-function createOAuthClient() {
+export function getAppUserDataPath(...segments) {
+  return path.join(app.getPath('userData'), ...segments);
+}
+
+export function createOAuthClient() {
   const credentials = getCredentials();
   const config = credentials.installed || credentials.web;
 
@@ -65,10 +55,21 @@ function createOAuthClient() {
   });
 }
 
-async function getNewTokenInteractive() {
+export function getOAuthRedirectUri() {
   const credentials = getCredentials();
   const config = credentials.installed || credentials.web;
-  const redirectUri = config.redirect_uris?.[0] || 'http://localhost';
+  return config.redirect_uris?.[0] || 'http://localhost';
+}
+
+export async function runInteractiveOAuthFlow({
+  scopes,
+  onTokens,
+  successMessage = 'Google authorization successful. You can close this window.',
+  buildAuthUrl,
+  onCallback
+}) {
+  const redirectUri = getOAuthRedirectUri();
+
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       try {
@@ -97,24 +98,27 @@ async function getNewTokenInteractive() {
         }
 
         const client = createOAuthClient();
-
         const { tokens } = await client.getToken(code);
         client.setCredentials(tokens);
 
-        saveGoogleToken(tokens);
+        if (onTokens) {
+          await onTokens(tokens, requestUrl);
+        }
+
+        const result = onCallback ? await onCallback({ client, tokens, requestUrl }) : client;
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end('Google authorization successful. You can close this window.');
+        res.end(successMessage);
 
         server.close();
-        resolve(client);
+        resolve(result);
       } catch (error) {
         try {
           res.statusCode = 500;
           res.end('Authorization failed');
         } catch {
-          // Ignore errors while sending response
+          // Ignore response write errors
         }
         server.close();
         reject(error);
@@ -126,15 +130,20 @@ async function getNewTokenInteractive() {
     const parsed = new URL(redirectUri);
     const hostname = parsed.hostname;
     const port = parsed.port ? Number(parsed.port) : 80;
+
     server.listen(port, hostname, async () => {
       try {
         const client = createOAuthClient();
 
-        const authUrl = client.generateAuthUrl({
+        const defaultAuthUrl = client.generateAuthUrl({
           access_type: 'offline',
-          scope: SCOPES,
+          scope: scopes,
           prompt: 'consent'
         });
+
+        const authUrl = buildAuthUrl
+          ? await buildAuthUrl({ client, authUrl: defaultAuthUrl })
+          : defaultAuthUrl;
 
         await shell.openExternal(authUrl);
       } catch (error) {
@@ -143,16 +152,4 @@ async function getNewTokenInteractive() {
       }
     });
   });
-}
-
-export async function getGoogleClient() {
-  const savedToken = readSavedGoogleToken();
-
-  if (savedToken) {
-    const client = createOAuthClient();
-    client.setCredentials(savedToken);
-    return client;
-  }
-
-  return getNewTokenInteractive();
 }

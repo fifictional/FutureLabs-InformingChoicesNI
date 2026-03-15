@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
-import { getGoogleClient } from './common/google-forms/google-client';
+import { getGoogleFormsClient } from './common/google-forms/google-forms-client';
 
 function createWindow() {
   // Create the browser window.
@@ -39,7 +39,7 @@ function createWindow() {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron');
 
@@ -53,6 +53,10 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong'));
 
   createWindow();
+
+  const result = await getGoogleFormsClient();
+
+  console.log(result);
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
