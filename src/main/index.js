@@ -22,10 +22,10 @@ function createWindow() {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    },
-    contextIsolation: true,
-    nodeIntegration: false
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
   })
 
   mainWindow.on('ready-to-show', () => {
