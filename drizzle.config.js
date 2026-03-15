@@ -4,4 +4,4 @@ export default {
   out: './drizzle',
   dbCredentials: { url: './dev.db' },
   dialect: 'sqlite'
-};
+}
