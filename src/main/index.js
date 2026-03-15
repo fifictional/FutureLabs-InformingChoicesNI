@@ -69,7 +69,16 @@ app.whenReady().then(() => {
 
   // Skip migration in fresh projects until the first migration set is generated.
   if (existsSync(migrationsFolder)) {
-    migrate(db, { migrationsFolder })
+    try {
+      migrate(db, { migrationsFolder })
+    } catch (error) {
+      console.error(
+        'Failed to run database migrations from folder:',
+        migrationsFolder,
+        '\nError:',
+        error
+      )
+    }
   }
 
   createWindow()
