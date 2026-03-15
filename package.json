@@ -39,7 +39,5 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "vite": "^7.2.6"
-  },
-  "asarUnpack": ["**/node_modules/better-sqlite3/**"],
-  "extraResources": [{ "from": "drizzle", "to": "drizzle" }]
+  }
 }
