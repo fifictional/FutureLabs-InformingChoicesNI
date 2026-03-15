@@ -1,4 +1,4 @@
-import { db } from '../client'
+import { getDb } from '../client'
 import { forms } from '../schema'
 import { eq } from 'drizzle-orm'
 
@@ -8,15 +8,15 @@ function serializeSchemaValue(schemaValue) {
 }
 
 export async function listForms() {
-  return db.select().from(forms)
+  return getDb().select().from(forms)
 }
 
 export async function listFormsByEvent(eventId) {
-  return db.select().from(forms).where(eq(forms.eventId, eventId))
+  return getDb().select().from(forms).where(eq(forms.eventId, eventId))
 }
 
 export async function createForm(data) {
-  return db
+  return getDb()
     .insert(forms)
     .values({
       name: data.name,
@@ -30,5 +30,5 @@ export async function createForm(data) {
 }
 
 export async function deleteForm(id) {
-  return db.delete(forms).where(eq(forms.id, id)).returning()
+  return getDb().delete(forms).where(eq(forms.id, id)).returning()
 }

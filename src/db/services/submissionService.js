@@ -1,13 +1,13 @@
-import { db } from '../client'
+import { getDb } from '../client'
 import { submissions } from '../schema'
 import { eq } from 'drizzle-orm'
 
 export async function listSubmissionsByForm(formId) {
-  return db.select().from(submissions).where(eq(submissions.formId, formId))
+  return getDb().select().from(submissions).where(eq(submissions.formId, formId))
 }
 
 export async function createSubmission(data) {
-  return db
+  return getDb()
     .insert(submissions)
     .values({
       formId: data.formId,
@@ -18,5 +18,5 @@ export async function createSubmission(data) {
 }
 
 export async function deleteSubmission(id) {
-  return db.delete(submissions).where(eq(submissions.id, id)).returning()
+  return getDb().delete(submissions).where(eq(submissions.id, id)).returning()
 }

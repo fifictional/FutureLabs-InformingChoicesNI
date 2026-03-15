@@ -1,21 +1,21 @@
-import { db } from '../client'
+import { getDb } from '../client'
 import { eventTagMappings, eventTags } from '../schema'
 import { and, eq } from 'drizzle-orm'
 
 export async function listEventTags() {
-  return db.select().from(eventTags)
+  return getDb().select().from(eventTags)
 }
 
 export async function createEventTag(data) {
-  return db.insert(eventTags).values({ name: data.name, slug: data.slug }).returning()
+  return getDb().insert(eventTags).values({ name: data.name, slug: data.slug }).returning()
 }
 
 export async function deleteEventTag(id) {
-  return db.delete(eventTags).where(eq(eventTags.id, id)).returning()
+  return getDb().delete(eventTags).where(eq(eventTags.id, id)).returning()
 }
 
 export async function listEventTagsForEvent(eventId) {
-  return db
+  return getDb()
     .select({ id: eventTags.id, name: eventTags.name, slug: eventTags.slug })
     .from(eventTagMappings)
     .innerJoin(eventTags, eq(eventTagMappings.tagId, eventTags.id))
@@ -23,7 +23,7 @@ export async function listEventTagsForEvent(eventId) {
 }
 
 export async function addTagToEvent(eventId, tagId) {
-  return db
+  return getDb()
     .insert(eventTagMappings)
     .values({ eventId, tagId })
     .onConflictDoNothing({ target: [eventTagMappings.eventId, eventTagMappings.tagId] })
@@ -31,7 +31,7 @@ export async function addTagToEvent(eventId, tagId) {
 }
 
 export async function removeTagFromEvent(eventId, tagId) {
-  return db
+  return getDb()
     .delete(eventTagMappings)
     .where(and(eq(eventTagMappings.eventId, eventId), eq(eventTagMappings.tagId, tagId)))
     .returning()

@@ -4,7 +4,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-import { db } from '../db/client.js'
+import { initDb } from '../db/client.js'
 import * as eventService from '../db/services/eventService.js'
 import * as eventTagService from '../db/services/eventTagService.js'
 import * as formService from '../db/services/formService'
@@ -66,6 +66,8 @@ app.whenReady().then(() => {
   const migrationsFolder = app.isPackaged
     ? join(process.resourcesPath, 'drizzle')
     : join(__dirname, '../../drizzle')
+
+  const db = initDb()
 
   // Skip migration in fresh projects until the first migration set is generated.
   if (existsSync(migrationsFolder)) {

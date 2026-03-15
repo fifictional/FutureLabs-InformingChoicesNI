@@ -1,20 +1,20 @@
 import { eq } from 'drizzle-orm'
-import { db } from '../client.js'
+import { getDb } from '../client.js'
 import { events } from '../schema.js'
 
 export async function listEvents() {
-  return db.select().from(events)
+  return getDb().select().from(events)
 }
 
 export async function createEvent(data) {
-  return db
+  return getDb()
     .insert(events)
     .values({ name: data.name, description: data.description ?? null })
     .returning()
 }
 
 export async function updateEvent(id, data) {
-  return db
+  return getDb()
     .update(events)
     .set({ name: data.name, description: data.description ?? null })
     .where(eq(events.id, id))
@@ -22,5 +22,5 @@ export async function updateEvent(id, data) {
 }
 
 export async function deleteEvent(id) {
-  return db.delete(events).where(eq(events.id, id)).returning()
+  return getDb().delete(events).where(eq(events.id, id)).returning()
 }
