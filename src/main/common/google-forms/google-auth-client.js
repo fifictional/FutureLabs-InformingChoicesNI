@@ -13,8 +13,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/forms.responses.readonly'
 ];
 
-function getFormsTokenFilePath() {
-  const tokenRelativePath = getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_FORMS_TOKEN_RELATIVE_PATH);
+function getTokenFilePath() {
+  const tokenRelativePath = getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH);
   if (!tokenRelativePath) {
     throw new Error('Google encrypted forms token path is not set');
   }
@@ -22,30 +22,29 @@ function getFormsTokenFilePath() {
   return getAppUserDataPath(tokenRelativePath);
 }
 
-function saveGoogleFormsToken(tokenObject) {
-  saveEncryptedToken(getFormsTokenFilePath(), tokenObject);
+function saveGoogleToken(tokenObject) {
+  saveEncryptedToken(getTokenFilePath(), tokenObject);
 }
 
-function readSavedGoogleFormsToken() {
-  return readEncryptedToken(getFormsTokenFilePath());
+function readSavedGoogleToken() {
+  return readEncryptedToken(getTokenFilePath());
 }
 
-async function getNewFormsTokenInteractive() {
+async function getNewTokenInteractive() {
   return runInteractiveOAuthFlow({
     scopes: SCOPES,
-    onTokens: saveGoogleFormsToken,
+    onTokens: saveGoogleToken,
     successMessage: 'Google Forms authorization successful. You can close this window.'
   });
 }
 
-export async function getGoogleFormsClient() {
-  const savedToken = readSavedGoogleFormsToken();
-
+export async function getGoogleAuthClient() {
+  const savedToken = readSavedGoogleToken();
   if (savedToken) {
     const client = createOAuthClient();
     client.setCredentials(savedToken);
     return client;
   }
 
-  return getNewFormsTokenInteractive();
+  return getNewTokenInteractive();
 }
