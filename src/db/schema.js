@@ -1,5 +1,7 @@
 import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
+// Define the SQL database schema using Drizzle ORM's SQLite adapter
+
 export const events = sqliteTable('events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),

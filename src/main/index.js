@@ -90,8 +90,7 @@ app.on('window-all-closed', () => {
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+// Register IPC handlers, which are wired to the service layer
 
 ipcMain.handle('events:list', () => eventService.listEvents())
 ipcMain.handle('events:create', (_event, data) => eventService.createEvent(data))
@@ -116,7 +115,9 @@ ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsBy
 ipcMain.handle('forms:create', (_event, data) => formService.createForm(data))
 ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id))
 
-ipcMain.handle('questions:listByForm', (_event, formId) => questionService.listQuestionsByForm(formId))
+ipcMain.handle('questions:listByForm', (_event, formId) =>
+  questionService.listQuestionsByForm(formId)
+)
 ipcMain.handle('questions:create', (_event, formId) => questionService.createQuestion(formId))
 ipcMain.handle('questions:delete', (_event, id) => questionService.deleteQuestion(id))
 

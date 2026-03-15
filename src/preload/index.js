@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
+// APIs for renderer
 const api = {
   events: {
     list: () => ipcRenderer.invoke('events:list'),

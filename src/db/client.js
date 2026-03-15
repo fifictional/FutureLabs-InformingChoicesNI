@@ -12,4 +12,5 @@ const sqlite = new Database(dbPath);
 // Use write-ahead logging
 sqlite.pragma('journal_mode = WAL');
 
+// Export Drizzle database client for use in services
 export const db = drizzle(sqlite, { schema });
