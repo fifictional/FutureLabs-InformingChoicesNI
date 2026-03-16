@@ -3,13 +3,13 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { initDb } from '../db/client.js';
-import * as eventService from '../db/services/eventService.js';
-import * as eventTagService from '../db/services/eventTagService.js';
-import * as formService from '../db/services/formService';
-import * as questionService from '../db/services/questionService';
-import * as submissionService from '../db/services/submissionService';
-import * as responseService from '../db/services/responseService';
+import { initDb } from './db/client.js';
+import * as eventService from './db/services/eventService.js';
+import * as eventTagService from './db/services/eventTagService.js';
+import * as formService from './db/services/formService';
+import * as questionService from './db/services/questionService';
+import * as submissionService from './db/services/submissionService';
+import * as responseService from './db/services/responseService';
 import icon from '../../resources/icon.png?asset';
 
 function createWindow() {
