@@ -11,6 +11,7 @@ import * as questionService from './db/services/questionService';
 import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import icon from '../../resources/icon.png?asset';
+import { listGoogleForms } from './common/google-forms/google-drive.js';
 
 function createWindow() {
   // Create the browser window.
@@ -142,3 +143,5 @@ ipcMain.handle('responses:listBySubmission', (_event, submissionId) =>
 );
 ipcMain.handle('responses:upsert', (_event, data) => responseService.upsertResponse(data));
 ipcMain.handle('responses:delete', (_event, id) => responseService.deleteResponse(id));
+
+ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
