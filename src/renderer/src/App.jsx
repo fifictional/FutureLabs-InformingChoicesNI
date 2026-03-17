@@ -1,5 +1,4 @@
 import { GoogleFormPicker } from "./components/google-forms/GoogleFormPicker";
-import './assets/main.css';
 
 function App() {
 
