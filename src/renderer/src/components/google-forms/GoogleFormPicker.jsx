@@ -1,5 +1,5 @@
-import { Autocomplete, Box, Button, Card, CardActionArea, CardHeader, CardMedia, Container, css, Divider, IconButton, Menu, MenuItem, Stack, TextField, Typography, useTheme } from "@mui/material";
-import { useEffect, useState } from "react";
+import { Autocomplete, Button, Card, CardActionArea, CardHeader, CardMedia, Container, css, Divider, IconButton, Menu, MenuItem, Stack, TextField, Typography, useTheme } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SortIcon from '@mui/icons-material/Sort';
@@ -13,14 +13,49 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
     const [error, setError] = useState(null);
     const [selectedFormIds, setSelectedFormIds] = useState([]);
     const [refresh, setRefresh] = useState(false);
-    const [filterOptions, setFilterOptions] = useState([]);
     const [filterValue, setFilterValue] = useState('');
-    const [sortBy, setSortBy] = useState('modifiedTimeAsc');
+    const [sortBy, setSortBy] = useState('modifiedTimeDesc');
+
+    const filterOptions = useMemo(() => {
+        return forms.map(form => ({
+            id: form.id,
+            label: form.name || "Untitled Form"
+        }));
+    }, [forms]);
     // endregion
 
     // region Element Specific State
     const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState(null);
-    const [displayedForms, setDisplayedForms] = useState([]);
+    const displayedForms = useMemo(() => {
+        const lowerFilter = filterValue.trim().toLowerCase();
+
+        const filtered = lowerFilter
+            ? forms.filter(form =>
+                (form.name || "").toLowerCase().includes(lowerFilter)
+            )
+            : forms;
+
+        const sorted = [...filtered];
+
+        switch (sortBy) {
+            case 'nameAsc':
+                sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                break;
+            case 'nameDesc':
+                sorted.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+                break;
+            case 'modifiedTimeAsc':
+                sorted.sort((a, b) => new Date(a.modifiedTime).getTime() - new Date(b.modifiedTime).getTime());
+                break;
+            case 'modifiedTimeDesc':
+                sorted.sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime());
+                break;
+            default:
+                break;
+        }
+
+        return sorted;
+    }, [forms, filterValue, sortBy]);
     // endregion
 
     // region Styles
@@ -54,13 +89,15 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
 
     const cardStyle = css`
         cursor: pointer;
+        box-sizing: border-box;
         width: 300px;
         @media (max-width: 600px) {
             width: 100%;
         }
 
         & .MuiCardActionArea-root[data-selected="true"] {
-            border: 2px solid ${theme.palette.primary.main};
+            outline: 2px solid ${theme.palette.primary.main};
+            outline-offset: -2px;
         }
     `;
     // endregion
@@ -87,46 +124,6 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
         fetchForms();
     }, [refresh]);
 
-    useEffect(() => {
-        if (forms.length > 0) {
-            const options = forms.map(form => ({
-                id: form.id,
-                label: form.name
-            }));
-            setFilterOptions(options);
-        }
-    }, [forms]);
-
-    useEffect(() => {
-        let filtered = forms;
-        if (filterValue) {
-            const lowerFilter = filterValue.toLowerCase();
-            filtered = forms.filter(form => form.name.toLowerCase().includes(lowerFilter));
-        }
-        setDisplayedForms(filtered);
-        
-    }, [filterValue, forms]);
-
-    useEffect(() => {
-        let sorted = [...displayedForms];
-        switch (sortBy) {
-            case 'nameAsc':
-                sorted.sort((a, b) => a.name.localeCompare(b.name));
-                break;
-            case 'nameDesc':
-                sorted.sort((a, b) => b.name.localeCompare(a.name));
-                break;
-            case 'modifiedTimeAsc':
-                sorted.sort((a, b) => new Date(a.modifiedTime) - new Date(b.modifiedTime));
-                break;
-            case 'modifiedTimeDesc':
-                sorted.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
-                break;  
-            default:
-                break;
-        }
-        setDisplayedForms(sorted);
-    }, [sortBy]);
     // endregion
 
     // region Handlers
@@ -149,7 +146,7 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
             <Stack>
                 <Stack css={topBarStyle} direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="h6">{alternateTitle ?? "Select Google Forms"}</Typography>
-                    <IconButton onClick={() => onCancel(true)} disabled={loading}>
+                    <IconButton onClick={() => onCancel()} disabled={loading}>
                         <CloseIcon />
                     </IconButton>
                 </Stack>
@@ -188,8 +185,8 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                             open={Boolean(sortMenuAnchorEl)}
                             onClose={() => setSortMenuAnchorEl(null)}
                         >
-                            <MenuItem onClick={() => handleSortSelect("modifiedTimeAsc")}>modified time newest</MenuItem>
-                            <MenuItem onClick={() => handleSortSelect("modifiedTimeDesc")}>modified time oldest</MenuItem>
+                            <MenuItem onClick={() => handleSortSelect("modifiedTimeDesc")}>modified time newest</MenuItem>
+                            <MenuItem onClick={() => handleSortSelect("modifiedTimeAsc")}>modified time oldest</MenuItem>
                             <MenuItem onClick={() => handleSortSelect("nameAsc")}>name A-Z</MenuItem>
                             <MenuItem onClick={() => handleSortSelect("nameDesc")}>name Z-A</MenuItem>
                         </Menu>
