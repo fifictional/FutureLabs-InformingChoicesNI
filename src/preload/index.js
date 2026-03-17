@@ -39,6 +39,9 @@ const api = {
       ipcRenderer.invoke('responses:listBySubmission', submissionId),
     upsert: (data) => ipcRenderer.invoke('responses:upsert', data),
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
+  },
+  googleForms: {
+    list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
   }
 };
 
