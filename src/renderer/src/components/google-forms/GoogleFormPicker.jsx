@@ -15,7 +15,7 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
     const [refresh, setRefresh] = useState(false);
     const [filterOptions, setFilterOptions] = useState([]);
     const [filterValue, setFilterValue] = useState('');
-    const [sortBy, setSortBy] = useState('modifiedTime');
+    const [sortBy, setSortBy] = useState('modifiedTimeAsc');
     // endregion
 
     // region Element Specific State
