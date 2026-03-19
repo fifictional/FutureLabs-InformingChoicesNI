@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { createTheme, ThemeProvider } from '@mui/material';
+import { HashRouter } from 'react-router';
+import './assets/index.css';
 
 const theme = createTheme({
   typography: {
@@ -18,7 +20,9 @@ const theme = createTheme({
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
-      <App />
+      <HashRouter>
+        <App />
+      </HashRouter>
     </ThemeProvider>
   </StrictMode>
 );
