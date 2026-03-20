@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router";
-import { Button, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
+import { Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
+import SkeletonAppBar from "../../components/skeletons/SkeletonAppBar";
 
 export default function GoogleAuthLayout() {
     const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -30,12 +31,18 @@ export default function GoogleAuthLayout() {
         }
     }
 
+    const handleClose = () => {
+        window.api.window.close();    
+    }
+
     if (isAuthenticated === null) {
         return <div>Checking authentication...</div>;
     }
 
     if (isAuthenticated === false) {
         return (
+            <>
+            <SkeletonAppBar />
             <Dialog open={true} onClose={(e) => e.preventDefault()}> 
                 {waitingLogin ? 
                     <CircularProgress />
@@ -60,6 +67,9 @@ export default function GoogleAuthLayout() {
                         <p>When you click the button, your default browser will open and Google will ask you to sign in and consent to the necessary permissions to run this application.</p>
                     </DialogContent>
                     <DialogActions>
+                        <Button onClick={handleClose} variant="contained" color="error">
+                            Close app
+                        </Button>
                         <Button onClick={handleLoginClick} variant="contained">
                             I consent, take me to Google Sign-In
                         </Button>
@@ -67,6 +77,7 @@ export default function GoogleAuthLayout() {
                     </>
                 }
             </Dialog>
+            </>
         )
     }
 
