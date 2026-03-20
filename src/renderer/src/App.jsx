@@ -10,7 +10,7 @@ function App() {
   return (
     <>
       <Routes>
-        <Route element={<GoogleAuthLayout />}>\
+        <Route element={<GoogleAuthLayout />}>
           <Route element={<AppBarLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="surveys" element={<Surveys />} />
