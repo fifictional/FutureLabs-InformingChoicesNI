@@ -12,7 +12,6 @@ export default function GoogleAuthLayout() {
             try {
                 const authenticated = await window.api.googleAuth.isUserAuthenticated();
                 setIsAuthenticated(authenticated);
-                console.log('Google authentication status:', isAuthenticated);
             } catch (err) {
                 setError('Error checking Google authentication: ' + err.message);
             }
