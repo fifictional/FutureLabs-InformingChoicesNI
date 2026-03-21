@@ -8,9 +8,11 @@ import {
 } from './google-oauth-common';
 
 const SCOPES = [
-  'https://www.googleapis.com/auth/drive.metadata.readonly',
+  'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/forms.body.readonly',
-  'https://www.googleapis.com/auth/forms.responses.readonly'
+  'https://www.googleapis.com/auth/forms.responses.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'openid'
 ];
 
 function getTokenFilePath() {
@@ -47,4 +49,68 @@ export async function getGoogleAuthClient() {
   }
 
   return getNewTokenInteractive();
+}
+
+export async function isUserAuthenticated() {
+  const savedToken = readSavedGoogleToken();
+  if (savedToken) {
+    const client = createOAuthClient();
+    client.setCredentials(savedToken);
+    try {
+      await client.getAccessToken();
+      return true;
+    } catch (error) {
+      console.warn('Saved Google token is invalid or expired:', error);
+    }
+  }
+
+  return false;
+}
+
+export function ensureAuthenticated() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const authenticated = await isUserAuthenticated();
+      if (authenticated) {
+        resolve(true);
+      } else {
+        await getNewTokenInteractive();
+        resolve(true);
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function fetchUserProfilePictureBase64(pictureUrl) {
+  const response = await fetch(pictureUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user profile picture: ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const mimeType = response.headers.get('content-type') || 'image/png';
+  return `data:${mimeType};base64,${Buffer.from(arrayBuffer).toString('base64')}`;
+}
+
+export async function getUserProfile() {
+  const token = readSavedGoogleToken();
+  if (!token) {
+    throw new Error('No Google token found');
+  }
+
+  const client = createOAuthClient();
+  client.setCredentials(token);
+  const response = await client.request({
+    url: 'https://www.googleapis.com/oauth2/v3/userinfo'
+  });
+
+  const userInfo = response.data;
+
+  if (userInfo.picture) {
+    userInfo.pictureBase64 = await fetchUserProfilePictureBase64(userInfo.picture);
+  }
+
+  return userInfo;
 }

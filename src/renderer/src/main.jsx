@@ -1,11 +1,28 @@
-import './assets/main.css';
-
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { createTheme, ThemeProvider } from '@mui/material';
+import { HashRouter } from 'react-router';
+import './assets/index.css';
+
+const theme = createTheme({
+  typography: {
+    fontFamily: [
+      'Inter',
+      'IBM Plex Sans',
+      'Montserrat',
+      'system-ui',
+      'sans-serif'
+    ].join(','),
+  },
+});
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ThemeProvider theme={theme}>
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </ThemeProvider>
   </StrictMode>
 );
