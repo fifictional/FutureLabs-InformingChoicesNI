@@ -1,10 +1,23 @@
-import { GoogleFormPicker } from "./components/google-forms/GoogleFormPicker";
+import { HashRouter, Route, Routes } from "react-router";
+import Home from "./pages/Home";
+import GoogleAuthLayout from "./pages/layouts/GoogleAuthLayout";
+import AppBarLayout from "./pages/layouts/AppBarLayout";
+import Surveys from "./pages/Surveys";
+import Analyse from "./pages/Analyse";
 
 function App() {
 
   return (
     <>
-      <h1>Informing Choices NI</h1>
+      <Routes>
+        <Route element={<GoogleAuthLayout />}>
+          <Route element={<AppBarLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="surveys" element={<Surveys />} />
+            <Route path="analyse" element={<Analyse />} />
+          </Route>
+        </Route>
+      </Routes>
     </>
   );
 }

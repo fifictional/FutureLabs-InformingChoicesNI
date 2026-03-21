@@ -14,27 +14,19 @@ export async function getGoogleDriveService() {
   return new drive({ version: 'v3', auth: authClient });
 }
 
-async function fetchThumbnailForFile(thumbnailLink) {
+async function fetchThumbnailForFile(client, thumbnailLink) {
   try {
-    const accessToken = (await getGoogleAuthClient()).credentials.access_token;
-    const response = await fetch(thumbnailLink, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+    const response = await client.request({
+      url: thumbnailLink,
+      responseType: 'arraybuffer'
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch thumbnail: ${response.statusText}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-
     return {
-      mimeType: response.headers.get('content-type') || 'image/png',
-      bytes: Buffer.from(arrayBuffer)
+      mimeType: response.headers['content-type'] || 'image/png',
+      bytes: Buffer.from(response.data)
     };
   } catch (error) {
-    console.error('Error fetching thumbnail:', error);
+    console.error('Error fetching thumbnail:', error?.response?.data || error.message);
     return null;
   }
 }

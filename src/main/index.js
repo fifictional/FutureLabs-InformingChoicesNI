@@ -12,13 +12,21 @@ import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
+import {
+  ensureAuthenticated,
+  getUserProfile,
+  isUserAuthenticated
+} from './common/google-forms/google-auth-client.js';
+
+let mainWindow;
 
 function createWindow() {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 900,
     show: false,
+    frame: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -144,4 +152,27 @@ ipcMain.handle('responses:listBySubmission', (_event, submissionId) =>
 ipcMain.handle('responses:upsert', (_event, data) => responseService.upsertResponse(data));
 ipcMain.handle('responses:delete', (_event, id) => responseService.deleteResponse(id));
 
+// google auth
+ipcMain.handle('googleAuth:isUserAuthenticated', () => isUserAuthenticated());
+ipcMain.handle('googleAuth:ensureAuthenticated', () => ensureAuthenticated());
+ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
+
+// google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
+
+// Window management
+ipcMain.on('window:minimize', () => {
+  mainWindow.minimize();
+});
+
+ipcMain.on('window:maximize-toggle', () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.on('window:close', () => {
+  mainWindow.close();
+});

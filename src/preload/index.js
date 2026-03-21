@@ -42,6 +42,16 @@ const api = {
   },
   googleForms: {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
+  },
+  googleAuth: {
+    isUserAuthenticated: () => ipcRenderer.invoke('googleAuth:isUserAuthenticated'),
+    ensureAuthenticated: () => ipcRenderer.invoke('googleAuth:ensureAuthenticated'),
+    getUserProfile: () => ipcRenderer.invoke('googleAuth:getUserProfile')
+  },
+  window: {
+    minimize: () => ipcRenderer.send('window:minimize'),
+    maximizeToggle: () => ipcRenderer.send('window:maximize-toggle'),
+    close: () => ipcRenderer.send('window:close')
   }
 };
 
