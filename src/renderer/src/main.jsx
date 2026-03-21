@@ -15,6 +15,11 @@ const theme = createTheme({
       'sans-serif'
     ].join(','),
   },
+  palette: {
+    primary: {
+      main: '#4CAF50',
+    }
+  },
 });
 
 createRoot(document.getElementById('root')).render(

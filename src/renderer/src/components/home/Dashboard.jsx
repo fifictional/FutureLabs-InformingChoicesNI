@@ -17,7 +17,7 @@ import { Star, StarHalf, StarBorder } from '@mui/icons-material';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
 
-function Dashboard() {
+export default function Dashboard() {
   const responses = [
     {
       name: 'Alice',
@@ -281,5 +281,3 @@ function Dashboard() {
     </Box>
   );
 }
-
-export default Dashboard;

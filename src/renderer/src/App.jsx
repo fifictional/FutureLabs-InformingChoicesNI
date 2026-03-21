@@ -1,4 +1,4 @@
-import { HashRouter, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import Home from "./pages/Home";
 import GoogleAuthLayout from "./pages/layouts/GoogleAuthLayout";
 import AppBarLayout from "./pages/layouts/AppBarLayout";
@@ -22,4 +22,4 @@ function App() {
   );
 }
 
-export default App
+export default App;
