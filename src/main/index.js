@@ -17,6 +17,7 @@ import {
   getUserProfile,
   isUserAuthenticated
 } from './common/google-forms/google-auth-client.js';
+import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
 
 let mainWindow;
 
@@ -159,6 +160,24 @@ ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
 
 // google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
+
+// excel survey import
+ipcMain.handle('surveys:parseExcelImport', (_event, buffer) => {
+  try {
+    return { ok: true, ...parseExcelImport(buffer) };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
+ipcMain.handle('surveys:commitExcelImport', async (_event, payload) => {
+  try {
+    const { buffer, formName, eventName, eventDescription } = payload || {};
+    const result = await commitExcelImport(buffer, { formName, eventName, eventDescription });
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
 
 // Window management
 ipcMain.on('window:minimize', () => {
