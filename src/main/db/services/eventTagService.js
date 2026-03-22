@@ -6,6 +6,10 @@ export async function listEventTags() {
   return getDb().select().from(eventTags);
 }
 
+export async function findEventTagBySlug(slug) {
+  return getDb().select().from(eventTags).where(eq(eventTags.slug, slug)).limit(1).get();
+}
+
 export async function createEventTag(data) {
   return getDb().insert(eventTags).values({ name: data.name, slug: data.slug }).returning();
 }
@@ -31,8 +35,18 @@ export async function addTagToEvent(eventId, tagId) {
 }
 
 export async function removeTagFromEvent(eventId, tagId) {
-  return getDb()
+  const tag = getDb()
     .delete(eventTagMappings)
     .where(and(eq(eventTagMappings.eventId, eventId), eq(eventTagMappings.tagId, tagId)))
     .returning();
+
+  const remainingMappings = getDb()
+    .select()
+    .from(eventTagMappings)
+    .where(eq(eventTagMappings.tagId, tagId));
+  const [remaining] = await remainingMappings;
+  if (!remaining) {
+    await getDb().delete(eventTags).where(eq(eventTags.id, tagId)).returning();
+  }
+  return tag;
 }
