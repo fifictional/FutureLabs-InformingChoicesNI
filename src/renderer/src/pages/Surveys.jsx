@@ -1,25 +1,32 @@
 import { Autocomplete, Box, Button, css, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GoogleFormPicker } from "../components/google-forms/GoogleFormPicker";
 import SortIcon from '@mui/icons-material/Sort';
+import LaunchIcon from '@mui/icons-material/Launch';
 import { CloudDownload, UploadFile } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 
 export default function Surveys() {
     const theme = useTheme();
-    const [actionsMenuOpened, setActionsMenuOpened] = useState(false);
-    const [actionsMenuAnchorEl, setActionsMenuAnchorEl] = useState(null);
+
+    // data    
     const [selectedSurvey, setSelectedSurvey] = useState(null);
-    const [googleFormPickerOpen, setGoogleFormPickerOpen] = useState(false);
     const [forms, setForms] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // actions menu
+    const [actionsMenuOpened, setActionsMenuOpened] = useState(false);
+    const [actionsMenuAnchorEl, setActionsMenuAnchorEl] = useState(null);
+
+    // sort and filter 
     const [filterValue, setFilterValue] = useState('');
     const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState(null);
-    const [selectedFormId, setSelectedFormId] = useState([]);
+
+    // import menu
+    const [googleFormPickerOpen, setGoogleFormPickerOpen] = useState(false);
     const [importMenuOpened, setImportMenuOpened] = useState(false);
     const [importMenuAnchorEl, setImportMenuAnchorEl] = useState(null);
 
@@ -83,10 +90,18 @@ export default function Surveys() {
                 color="primary" 
                 onClick={() => window.open(params.value, '_blank')}
             >
-                <CloudDownload />
+                <LaunchIcon />
             </IconButton>
         )}
     ];
+
+    const dataGridExampleRow = [
+        { id: 1, name: 'Customer Satisfaction Survey', Event: 'Customer Feedback', modifiedTime: '2024-06-01', ResponseCount: 120, webViewLink: 'https://docs.google.com/forms/d/1abc123/viewform' },
+    ]
+
+    useEffect(() => {
+        console.log("Selected survey changed:", selectedSurvey);
+    }, [selectedSurvey]);
 
     return (
         <>
@@ -134,7 +149,7 @@ export default function Surveys() {
                         variant="contained" 
                         color="accent"
                         endIcon={<ArrowDropDownIcon />}>
-                        Import from Drive
+                        Import Surveys
                     </Button>
                     <Menu label="Actions" anchorEl={importMenuAnchorEl} open={importMenuOpened} onClose={() => setImportMenuOpened(false)}>
                         <MenuItem value="from-google-drive" onClick={() => setGoogleFormPickerOpen(true)}>
@@ -210,7 +225,11 @@ export default function Surveys() {
                         Refresh
                     </Button>   
                 </Stack>
-                <DataGrid columns={dataGridColumns} />
+                <DataGrid 
+                    columns={dataGridColumns} 
+                    rows={dataGridExampleRow}
+                    onRowSelectionModelChange={(newSelection) => setSelectedSurvey(newSelection.ids?.values()?.next()?.value || null)}
+                />
             </Box>
         </Box>
         </>
