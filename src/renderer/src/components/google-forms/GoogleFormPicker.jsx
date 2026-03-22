@@ -4,7 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SortIcon from '@mui/icons-material/Sort';
 
-export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternateSubtitle, ...props }) {
+export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternateSubtitle }) {
     const theme = useTheme();
     
     // region Form Picker State 

@@ -45,23 +45,16 @@ export async function listGoogleForms(pageToken) {
     pageToken
   });
 
+  const client = await getGoogleAuthClient();
   if (response.data.files) {
     for (const file of response.data.files) {
       if (file.thumbnailLink) {
-        const thumbnail = await fetchThumbnailForFile(file.thumbnailLink);
+        const thumbnail = await fetchThumbnailForFile(client, file.thumbnailLink);
         const base64 = thumbnail.bytes.toString('base64');
         file.thumbnailBase64 = `data:${thumbnail.mimeType};base64,${base64}`;
       }
     }
   }
 
-  return (
-    {
-      files: response.data.files,
-      nextPageToken: response.data.nextPageToken
-    } ?? {
-      files: [],
-      nextPageToken: null
-    }
-  );
+  return { files: response.data.files, nextPageToken: response.data.nextPageToken };
 }

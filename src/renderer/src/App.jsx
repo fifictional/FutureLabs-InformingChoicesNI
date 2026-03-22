@@ -1,9 +1,10 @@
-import { HashRouter, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import Home from "./pages/Home";
 import GoogleAuthLayout from "./pages/layouts/GoogleAuthLayout";
 import AppBarLayout from "./pages/layouts/AppBarLayout";
 import Surveys from "./pages/Surveys";
 import Analyse from "./pages/Analyse";
+import Events from "./pages/Events";
 
 function App() {
 
@@ -15,6 +16,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="surveys" element={<Surveys />} />
             <Route path="analyse" element={<Analyse />} />
+            <Route path="events" element={<Events />} />
           </Route>
         </Route>
       </Routes>

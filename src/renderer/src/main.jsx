@@ -4,6 +4,7 @@ import App from './App';
 import { createTheme, ThemeProvider } from '@mui/material';
 import { HashRouter } from 'react-router';
 import './assets/index.css';
+import { text } from 'd3';
 
 const theme = createTheme({
   typography: {
@@ -14,6 +15,15 @@ const theme = createTheme({
       'system-ui',
       'sans-serif'
     ].join(','),
+  },
+  palette: {
+    primary: {
+      main: '#4CAF50',
+    },
+    accent: {
+      main: '#18385F',
+      contrastText: '#FFFFFF',
+    }
   },
 });
 
