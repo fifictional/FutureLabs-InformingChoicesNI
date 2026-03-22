@@ -67,7 +67,7 @@ export default function GoogleAuthLayout() {
                         <p>When you click the button, your default browser will open and Google will ask you to sign in and consent to the necessary permissions to run this application.</p>
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleClose} variant="contained" color="error">
+                        <Button onClick={handleClose} variant="outlined" color="error">
                             Close app
                         </Button>
                         <Button onClick={handleLoginClick} variant="contained">

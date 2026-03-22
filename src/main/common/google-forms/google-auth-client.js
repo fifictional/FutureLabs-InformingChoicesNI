@@ -67,20 +67,18 @@ export async function isUserAuthenticated() {
   return false;
 }
 
-export function ensureAuthenticated() {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const authenticated = await isUserAuthenticated();
-      if (authenticated) {
-        resolve(true);
-      } else {
-        await getNewTokenInteractive();
-        resolve(true);
-      }
-    } catch (error) {
-      reject(error);
+export async function ensureAuthenticated() {
+  try {
+    const authenticated = await isUserAuthenticated();
+    if (authenticated) {
+      return true;
+    } else {
+      await getNewTokenInteractive();
+      return true;
     }
-  });
+  } catch (error) {
+    return error;
+  }
 }
 
 async function fetchUserProfilePictureBase64(pictureUrl) {

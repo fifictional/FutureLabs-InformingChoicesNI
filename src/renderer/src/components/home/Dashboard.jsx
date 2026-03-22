@@ -10,9 +10,9 @@ import {
   Legend,
   ResponsiveContainer,
   LineChart,
-  Line
+  Line 
 } from 'recharts';
-import { Card, CardContent, Typography, Box } from '@mui/material';
+import { Card, CardContent, Typography, Box, Container, css } from '@mui/material';
 import { Star, StarHalf, StarBorder } from '@mui/icons-material';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
@@ -122,135 +122,124 @@ export default function Dashboard() {
     return stars;
   };
 
+  const dashboardBackgroundStyle = css`
+    background-color: #f5f5f5;
+    width: 100%;
+    height: 100%;
+  `;
+
+  const dashboardContainerStyle = css`
+    margin: 0 auto;
+    padding: 2rem;
+  `;
+
+  const SmallStatisticCard = ({title, children}) => {
+    return (
+      <Card elevation={2} sx={{ flex: 1 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Typography color="text.secondary" fontSize={12} mb={0.5}>
+            {title}
+          </Typography>
+          {children}
+        </CardContent>
+      </Card>
+    )}
+
+  const ChartCard = ({title, children}) => {
+    return (
+      <Card elevation={2} sx={{ flex: 1, width: '50%' }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight="bold" mb={2}>
+            {title}
+          </Typography>
+          {children}
+        </CardContent>
+      </Card>
+    )};
+
+
   return (
-    <Box sx={{ backgroundColor: '#f5f5f5', minHeight: '100vh', width: '100%', overflowY: 'auto' }}>
-      <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-        <Typography variant="h4" fontWeight="bold" mb={3} color="#000000">
-          Dashboard
-        </Typography>
+    <>  
+    <Box css={dashboardBackgroundStyle}>
+      <Box css={dashboardContainerStyle}>
 
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography color="text.secondary" fontSize={12} mb={0.5}>
-                Total Feedback Received
-              </Typography>
-              <Typography variant="h4" fontWeight="bold">
-                {totalUsers}
-              </Typography>
-            </CardContent>
-          </Card>
-
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography color="text.secondary" fontSize={12} mb={0.5}>
-                Avg Satisfaction
-              </Typography>
-              <Box sx={{ display: 'flex' }}>{renderStars(parseFloat(avgSatisfaction))}</Box>
+          <SmallStatisticCard title="Total Feedback Received">
+            <Typography variant="h4" fontWeight="bold">
+              {totalUsers}
+            </Typography>
+          </SmallStatisticCard>
+          <SmallStatisticCard title="Avg Satisfaction">
+            <Box sx={{ display: 'flex' }}>{renderStars(parseFloat(avgSatisfaction))}</Box>
               <Typography variant="h6" fontWeight="bold">
                 {avgSatisfaction} / 5
               </Typography>
-            </CardContent>
-          </Card>
-
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography color="text.secondary" fontSize={12} mb={0.5}>
-                Improved
-              </Typography>
+          </SmallStatisticCard>
+          <SmallStatisticCard title="Improved">
               <Typography variant="h4" fontWeight="bold">
                 {improvedPercent}%
               </Typography>
-            </CardContent>
-          </Card>
-
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography color="text.secondary" fontSize={12} mb={0.5}>
-                Appointments Delivered
-              </Typography>
-              <Typography variant="h4" fontWeight="bold">
-                {appointmentsDelivered}
-              </Typography>
-            </CardContent>
-          </Card>
+          </SmallStatisticCard>
+          <SmallStatisticCard title="Total Appointments Delivered">
+            <Typography variant="h4" fontWeight="bold">
+              {appointmentsDelivered}
+            </Typography>
+          </SmallStatisticCard>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2}>
-                Age Distribution
-              </Typography>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={ageBandData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                  <XAxis dataKey="band" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#4CAF50" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2}>
-                Referral Sources
-              </Typography>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={referralData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={70}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    labelLine={{ strokeWidth: 1 }}
-                  >
-                    {referralData.map((entry, index) => (
-                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Legend iconSize={10} />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        <Box sx={{ display: 'flex', gap: 2, pb: 2 }}>
+          <ChartCard title="Age Distribution">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={ageBandData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                <XAxis dataKey="band" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Referral Sources">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={referralData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={70}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  labelLine={{ strokeWidth: 1 }}
+                >
+                  {referralData.map((entry, index) => (
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Legend iconSize={10} />
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </Box>
-
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2}>
-                Yearly Growth in Service Users
-              </Typography>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={yearlyData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                  <XAxis dataKey="year" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#4CAF50"
-                    strokeWidth={2}
-                    dot={{ fill: '#4CAF50' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card elevation={2} sx={{ flex: 1 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2}>
-                Geographical Distribution
-              </Typography>
-              <Box sx={{ height: 220 }}>
+        <Box sx={{ display: 'flex', gap: 2}}>
+          <ChartCard title="Yearly Growth in Service Users">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={yearlyData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                <XAxis dataKey="year" />
+                <YAxis />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#4CAF50"
+                  strokeWidth={2}
+                  dot={{ fill: '#4CAF50' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Geographical Distribution">
+            <Box sx={{ height: 220 }}>
                 <MapContainer
                   center={[54.7, -6.5]}
                   zoom={7}
@@ -274,10 +263,10 @@ export default function Dashboard() {
                   ))}
                 </MapContainer>
               </Box>
-            </CardContent>
-          </Card>
+          </ChartCard>
         </Box>
       </Box>
     </Box>
+    </>
   );
 }
