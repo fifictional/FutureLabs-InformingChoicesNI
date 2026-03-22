@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import ViewDescriptionDialog from "../components/events/ViewDescriptionDialog.jsx";
 import DeleteEventDialog from "../components/events/DeleteEventDialog.jsx";
 import EditTagsDialog from "../components/events/EditTagsDialog.jsx";
+import EditEventDialog from "../components/events/EditEventDialog.jsx";
 
 export default function Events() {
     const theme = useTheme();
@@ -30,6 +31,7 @@ export default function Events() {
     // event actions
     const [deleteEventDialogOpen, setDeleteEventDialogOpen] = useState(false);
     const [editTagsDialogOpen, setEditTagsDialogOpen] = useState(false);
+    const [editEventDialogOpen, setEditEventDialogOpen] = useState(false);
 
     // filter
     const [filterValue, setFilterValue] = useState('');
@@ -148,13 +150,13 @@ export default function Events() {
                         Event Actions
                     </Button>
                     <Menu label="Actions" anchorEl={actionsMenuAnchorEl} open={actionsMenuOpened} onClose={() => setActionsMenuOpened(false)}>
-                        <MenuItem disabled={!selectedEvent} value="view-data">View Surveys</MenuItem>
-                        <MenuItem disabled={!selectedEvent} value="edit-event">Edit Event</MenuItem>
+                        <MenuItem disabled={!selectedEvent} onClick={() => setEditEventDialogOpen(true)} value="edit-event">Edit Event</MenuItem>
                         <MenuItem disabled={!selectedEvent} onClick={() => setEditTagsDialogOpen(true)} value="edit-tags">Edit Tags</MenuItem>
                         <MenuItem disabled={!selectedEvent} onClick={() => setDeleteEventDialogOpen(true)} value="delete">Delete</MenuItem>
                     </Menu>
                     <DeleteEventDialog onDelete={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={deleteEventDialogOpen} handleClose={() => setDeleteEventDialogOpen(false)} />
                     <EditTagsDialog onEdit={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editTagsDialogOpen} handleClose={() => setEditTagsDialogOpen(false)} />
+                    <EditEventDialog onEdit={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editEventDialogOpen} handleClose={() => setEditEventDialogOpen(false)} />
                     <Button variant="contained" color="accent" endIcon={<Add />} onClick={() => setCreateEventDialogOpen(true)}>
                         Create New Event
                     </Button>

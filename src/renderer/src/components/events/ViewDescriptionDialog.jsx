@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 
-export default function ViewDescriptionDialog({ ...props }) {
+export default function ViewDescriptionDialog({  ...props }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleOpen = () => setDialogOpen(true);
