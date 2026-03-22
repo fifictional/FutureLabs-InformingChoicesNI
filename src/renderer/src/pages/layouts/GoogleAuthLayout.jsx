@@ -32,7 +32,7 @@ export default function GoogleAuthLayout() {
     }
 
     const handleClose = () => {
-        window.api.window.close();    
+        window.api.window.close();
     }
 
     if (isAuthenticated === null) {
@@ -43,8 +43,8 @@ export default function GoogleAuthLayout() {
         return (
             <>
             <SkeletonAppBar />
-            <Dialog open={true} onClose={(e) => e.preventDefault()}> 
-                {waitingLogin ? 
+            <Dialog open={true} onClose={(e) => e.preventDefault()}>
+                {waitingLogin ?
                     <CircularProgress />
                  : error ?
                     <>
@@ -60,7 +60,7 @@ export default function GoogleAuthLayout() {
                     </DialogActions>
                     </>
                  :
-                    <>  
+                    <>
                     <DialogTitle>Sign In with Google</DialogTitle>
                     <DialogContent>
                         <p>You need to log in with your Google account for the application to access your forms. Please click the button below to authenticate.</p>
