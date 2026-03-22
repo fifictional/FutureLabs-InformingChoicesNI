@@ -83,6 +83,10 @@ const MOCK_SURVEYS = [
   }
 ];
 
+function buildEntryId() {
+  return `entry-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function normalizeQuestion(text) {
   return text.trim().toLowerCase();
 }
@@ -117,9 +121,7 @@ export default function Analyse() {
   const [selectorStep, setSelectorStep] = useState('survey');
   const [selectedSurveyId, setSelectedSurveyId] = useState('');
   const [selectedQuestionId, setSelectedQuestionId] = useState('');
-  const [selectedQuestionText, setSelectedQuestionText] = useState('');
-  const [matchingSurveyIds, setMatchingSurveyIds] = useState([]);
-  const [submittedSurveyIds, setSubmittedSurveyIds] = useState([]);
+  const [analysisEntries, setAnalysisEntries] = useState([]);
 
   const selectedSurvey = useMemo(
     () => MOCK_SURVEYS.find((survey) => survey.id === selectedSurveyId) || null,
@@ -128,34 +130,46 @@ export default function Analyse() {
 
   const selectedSurveyQuestions = selectedSurvey?.questions || [];
 
-  const matchingSurveys = useMemo(() => {
-    if (!selectedQuestionText) {
-      return [];
-    }
+  const matchingSurveysByEntry = useMemo(() => {
+    const lookup = {};
 
-    return MOCK_SURVEYS.filter((survey) =>
-      survey.questions.some(
-        (question) => normalizeQuestion(question.text) === normalizeQuestion(selectedQuestionText)
-      )
-    );
-  }, [selectedQuestionText]);
+    analysisEntries.forEach((entry) => {
+      lookup[entry.id] = MOCK_SURVEYS.filter((survey) =>
+        survey.questions.some(
+          (question) => normalizeQuestion(question.text) === normalizeQuestion(entry.questionText)
+        )
+      );
+    });
 
-  const aggregateResult = useMemo(() => {
-    if (!selectedQuestionText || submittedSurveyIds.length === 0) {
-      return null;
-    }
+    return lookup;
+  }, [analysisEntries]);
 
-    return buildAggregate(selectedQuestionText, submittedSurveyIds);
-  }, [selectedQuestionText, submittedSurveyIds]);
+  const aggregateResultByEntry = useMemo(() => {
+    const lookup = {};
+
+    analysisEntries.forEach((entry) => {
+      if (entry.submittedSurveyIds.length === 0) {
+        return;
+      }
+
+      lookup[entry.id] = buildAggregate(entry.questionText, entry.submittedSurveyIds);
+    });
+
+    return lookup;
+  }, [analysisEntries]);
 
   const handleOpenSelector = () => {
     setIsSelectorOpen(true);
     setSelectorStep('survey');
+    setSelectedSurveyId('');
+    setSelectedQuestionId('');
   };
 
   const handleCloseSelector = () => {
     setIsSelectorOpen(false);
     setSelectorStep('survey');
+    setSelectedSurveyId('');
+    setSelectedQuestionId('');
   };
 
   const handleContinueToQuestion = () => {
@@ -170,26 +184,48 @@ export default function Analyse() {
     }
 
     const candidateSurveys = MOCK_SURVEYS.filter((survey) =>
-      survey.questions.some((item) => normalizeQuestion(item.text) === normalizeQuestion(question.text))
+      survey.questions.some(
+        (item) => normalizeQuestion(item.text) === normalizeQuestion(question.text)
+      )
     );
 
     const candidateIds = candidateSurveys.map((survey) => survey.id);
 
     setSelectedQuestionId(question.id);
-    setSelectedQuestionText(question.text);
-    setMatchingSurveyIds(candidateIds);
-    setSubmittedSurveyIds([]);
+    setAnalysisEntries((previousEntries) => [
+      ...previousEntries,
+      {
+        id: buildEntryId(),
+        sourceSurveyName: selectedSurvey.name,
+        questionId: question.id,
+        questionText: question.text,
+        matchingSurveyIds: candidateIds,
+        submittedSurveyIds: []
+      }
+    ]);
     setIsSelectorOpen(false);
     setSelectorStep('survey');
+    setSelectedSurveyId('');
+    setSelectedQuestionId('');
   };
 
-  const handleSubmitSurveySelection = () => {
-    setSubmittedSurveyIds(matchingSurveyIds);
+  const updateEntry = (entryId, updater) => {
+    setAnalysisEntries((previousEntries) =>
+      previousEntries.map((entry) => {
+        if (entry.id !== entryId) {
+          return entry;
+        }
+
+        return typeof updater === 'function' ? updater(entry) : { ...entry, ...updater };
+      })
+    );
   };
 
-  const selectedSurveyNames = MOCK_SURVEYS.filter((survey) => submittedSurveyIds.includes(survey.id)).map(
-    (survey) => survey.name
-  );
+  const removeEntry = (entryId) => {
+    setAnalysisEntries((previousEntries) =>
+      previousEntries.filter((entry) => entry.id !== entryId)
+    );
+  };
 
   return (
     <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100%' }}>
@@ -203,91 +239,125 @@ export default function Analyse() {
 
         <Box>
           <Button variant="contained" onClick={handleOpenSelector}>
-            Select Survey Question
+            Add Survey Question
           </Button>
         </Box>
 
-        {selectedQuestionText && (
-          <Card>
-            <CardContent>
-              <Stack spacing={2}>
-                <Typography variant="h6">Selected Question</Typography>
-                <Typography>{selectedQuestionText}</Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Found in {matchingSurveys.length} survey(s). Select one or more surveys to include.
-                </Typography>
-
-                <FormControl fullWidth>
-                  <InputLabel id="matching-surveys-label">Matching Surveys</InputLabel>
-                  <Select
-                    labelId="matching-surveys-label"
-                    multiple
-                    value={matchingSurveyIds}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setMatchingSurveyIds(typeof value === 'string' ? value.split(',') : value);
-                    }}
-                    input={<OutlinedInput label="Matching Surveys" />}
-                    renderValue={(selected) =>
-                      MOCK_SURVEYS.filter((survey) => selected.includes(survey.id))
-                        .map((survey) => survey.name)
-                        .join(', ')
-                    }
-                  >
-                    {matchingSurveys.map((survey) => (
-                      <MenuItem key={survey.id} value={survey.id}>
-                        <Checkbox checked={matchingSurveyIds.includes(survey.id)} />
-                        <ListItemText primary={survey.name} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <Box>
-                  <Button
-                    variant="contained"
-                    onClick={handleSubmitSurveySelection}
-                    disabled={matchingSurveyIds.length === 0}
-                  >
-                    Submit Selection
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-
-        {aggregateResult && (
-          <Card>
-            <CardContent>
-              <Stack spacing={2}>
-                <Typography variant="h6">Aggregated Results</Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Combined {aggregateResult.totalResponses} responses from {selectedSurveyNames.length} survey(s):{' '}
-                  {selectedSurveyNames.join(', ')}
-                </Typography>
-
-                <Box sx={{ width: '100%', height: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={aggregateResult.data} margin={{ top: 10, right: 24, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="answer" interval={0} angle={-10} textAnchor="end" height={70} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#4CAF50" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-
-        {!selectedQuestionText && (
+        {analysisEntries.length === 0 && (
           <Alert severity="info">
-            Start by selecting a survey question. The app will then find identical questions across surveys.
+            Add one or more survey questions to compare their aggregated responses side by side.
           </Alert>
         )}
+
+        {analysisEntries.map((entry) => {
+          const matchingSurveys = matchingSurveysByEntry[entry.id] || [];
+          const aggregateResult = aggregateResultByEntry[entry.id] || null;
+          const selectedSurveyNames = MOCK_SURVEYS.filter((survey) =>
+            entry.submittedSurveyIds.includes(survey.id)
+          ).map((survey) => survey.name);
+          const selectLabelId = `matching-surveys-label-${entry.id}`;
+
+          return (
+            <Card key={entry.id}>
+              <CardContent>
+                <Stack spacing={2}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="start" spacing={2}>
+                    <Box>
+                      <Typography variant="h6">{entry.questionText}</Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Added from {entry.sourceSurveyName} ({entry.questionId})
+                      </Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Found in {matchingSurveys.length} survey(s). Select one or more surveys to include.
+                      </Typography>
+                    </Box>
+                    <Button color="error" onClick={() => removeEntry(entry.id)}>
+                      Remove
+                    </Button>
+                  </Stack>
+
+                  <FormControl fullWidth>
+                    <InputLabel id={selectLabelId}>Matching Surveys</InputLabel>
+                    <Select
+                      variant="outlined"
+                      labelId={selectLabelId}
+                      multiple
+                      value={entry.matchingSurveyIds}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        const nextMatchingSurveyIds =
+                          typeof value === 'string' ? value.split(',') : value;
+
+                        updateEntry(entry.id, {
+                          matchingSurveyIds: nextMatchingSurveyIds,
+                          submittedSurveyIds: []
+                        });
+                      }}
+                      input={<OutlinedInput label="Matching Surveys" />}
+                      renderValue={(selected) =>
+                        MOCK_SURVEYS.filter((survey) => selected.includes(survey.id))
+                          .map((survey) => survey.name)
+                          .join(', ')
+                      }
+                    >
+                      {matchingSurveys.map((survey) => (
+                        <MenuItem key={survey.id} value={survey.id}>
+                          <Checkbox checked={entry.matchingSurveyIds.includes(survey.id)} />
+                          <ListItemText primary={survey.name} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <Box>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        updateEntry(entry.id, {
+                          submittedSurveyIds: entry.matchingSurveyIds
+                        });
+                      }}
+                      disabled={entry.matchingSurveyIds.length === 0}
+                    >
+                      Submit Selection
+                    </Button>
+                  </Box>
+
+                  {aggregateResult && (
+                    <Stack spacing={2}>
+                      <Typography variant="h6">Aggregated Results</Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Combined {aggregateResult.totalResponses} responses from {selectedSurveyNames.length}{' '}
+                        survey(s): {selectedSurveyNames.join(', ')}
+                      </Typography>
+
+                      <Box sx={{ width: '100%', height: 320 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={aggregateResult.data}
+                            margin={{ top: 10, right: 24, left: 0, bottom: 8 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="answer"
+                              interval={0}
+                              angle={-10}
+                              textAnchor="end"
+                              height={70}
+                            />
+                            <YAxis allowDecimals={false} />
+                            <Tooltip />
+                            <Bar dataKey="count" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </Stack>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          );
+        })}
       </Stack>
 
       <Dialog open={isSelectorOpen} onClose={handleCloseSelector} fullWidth maxWidth="sm">
@@ -300,6 +370,7 @@ export default function Analyse() {
             <FormControl fullWidth sx={{ mt: 1 }}>
               <InputLabel id="survey-select-label">Survey</InputLabel>
               <Select
+                variant="outlined"
                 labelId="survey-select-label"
                 value={selectedSurveyId}
                 label="Survey"
@@ -316,6 +387,7 @@ export default function Analyse() {
             <FormControl fullWidth sx={{ mt: 1 }}>
               <InputLabel id="question-select-label">Question</InputLabel>
               <Select
+                variant="outlined"
                 labelId="question-select-label"
                 value={selectedQuestionId}
                 label="Question"
@@ -334,7 +406,11 @@ export default function Analyse() {
         <DialogActions>
           <Button onClick={handleCloseSelector}>Cancel</Button>
           {selectorStep === 'survey' && (
-            <Button variant="contained" onClick={handleContinueToQuestion} disabled={!selectedSurveyId}>
+            <Button
+              variant="contained"
+              onClick={handleContinueToQuestion}
+              disabled={!selectedSurveyId}
+            >
               Continue
             </Button>
           )}
