@@ -31,9 +31,9 @@ export const eventTagMappings = sqliteTable(
 export const forms = sqliteTable('forms', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
-  provider: text('provider', { enum: ['google_forms'] }).notNull(),
-  baseLink: text('base_link').notNull(),
-  externalId: text('external_id').notNull(),
+  provider: text('provider', { enum: ['google_forms', 'file'] }).notNull(),
+  baseLink: text('base_link'),
+  externalId: text('external_id'),
   eventId: integer('event_id')
     .notNull()
     .references(() => events.id, { onDelete: 'cascade' }),

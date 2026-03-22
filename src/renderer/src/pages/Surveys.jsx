@@ -31,7 +31,7 @@ export default function Surveys() {
     const [importMenuAnchorEl, setImportMenuAnchorEl] = useState(null);
 
     // create new survey
-    const [createSurveyMenuOpen, setCreateSurveyMenuOpen] = useState(false);
+    const [createSurveyDialogOpen, setCreateSurveyDialogOpen] = useState(false);
     const [newSurveyTitle, setNewSurveyTitle] = useState('');
 
     const excelFileInputRef = useRef(null);
@@ -148,6 +148,7 @@ export default function Surveys() {
     const dataGridColumns = [
         { field: 'name', headerName: 'Name', flex: 1 },
         { field: 'Event', headerName: 'Event', width: 300 },
+        { field: "source", headerName: "Source", width: 150 },
         { field: 'modifiedTime', headerName: 'Modified Time', width: 180 },
         { field: 'ResponseCount', headerName: 'Responses', width: 120 },
         { field: 'webViewLink', headerName: 'Link', width: 100, renderCell: (params) => (
@@ -161,7 +162,7 @@ export default function Surveys() {
     ];
 
     const dataGridExampleRow = [
-        { id: 1, name: 'Customer Satisfaction Survey', Event: 'Customer Feedback', modifiedTime: '2024-06-01', ResponseCount: 120, webViewLink: 'https://docs.google.com/forms/d/1abc123/viewform' },
+        { id: 1, name: 'Customer Satisfaction Survey', Event: 'Customer Feedback', source: "Google Forms", modifiedTime: '2024-06-01', ResponseCount: 120, webViewLink: 'https://docs.google.com/forms/d/1abc123/viewform' },
     ]
 
     useEffect(() => {
@@ -189,10 +190,10 @@ export default function Surveys() {
                         <MenuItem disabled={!selectedSurvey} value="edit">Edit</MenuItem>
                         <MenuItem disabled={!selectedSurvey} value="delete">Delete</MenuItem>
                     </Menu>
-                    <Button variant="contained" endIcon={<AddIcon />} onClick={() => setCreateSurveyMenuOpen(true)}>
+                    <Button variant="contained" endIcon={<AddIcon />} onClick={() => setCreateSurveyDialogOpen(true)}>
                         Create New Survey
                     </Button>
-                    <Dialog fullWidth maxWidth="sm" open={createSurveyMenuOpen} onClose={() => setCreateSurveyMenuOpen(false)}>
+                    <Dialog fullWidth maxWidth="sm" open={createSurveyDialogOpen} onClose={() => setCreateSurveyDialogOpen(false)}>
                         <DialogTitle>Create New Survey</DialogTitle>
                         <DialogContent>
                             <Typography variant="body1" mb={1}>
@@ -201,10 +202,10 @@ export default function Surveys() {
                             <TextField onChange={(e) => setNewSurveyTitle(e.target.value)}  fullWidth label="Survey Title" variant="outlined" margin="normal" />
                         </DialogContent>
                         <DialogActions>
-                            <Button onClick={() => setCreateSurveyMenuOpen(false)} variant="outlined" color="error">
+                            <Button onClick={() => setCreateSurveyDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button disabled={!newSurveyTitle} onClick={() => setCreateSurveyMenuOpen(false)} variant="contained" color="primary">
+                            <Button disabled={!newSurveyTitle} onClick={() => setCreateSurveyDialogOpen(false)} variant="contained" color="primary">
                                 Create
                             </Button>
                         </DialogActions>

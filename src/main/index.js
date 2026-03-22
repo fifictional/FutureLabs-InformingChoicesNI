@@ -113,11 +113,15 @@ app.on('window-all-closed', () => {
 // Register IPC handlers, which are wired to the service layer
 
 ipcMain.handle('events:list', () => eventService.listEvents());
+ipcMain.handle('events:listWithSurveyCountsAndTags', () =>
+  eventService.listEventsWithSurveyCountsAndTags()
+);
 ipcMain.handle('events:create', (_event, data) => eventService.createEvent(data));
 ipcMain.handle('events:update', (_event, id, data) => eventService.updateEvent(id, data));
 ipcMain.handle('events:delete', (_event, id) => eventService.deleteEvent(id));
 
 ipcMain.handle('eventTags:list', () => eventTagService.listEventTags());
+ipcMain.handle('eventTags:findBySlug', (_event, slug) => eventTagService.findEventTagBySlug(slug));
 ipcMain.handle('eventTags:create', (_event, data) => eventTagService.createEventTag(data));
 ipcMain.handle('eventTags:delete', (_event, id) => eventTagService.deleteEventTag(id));
 ipcMain.handle('eventTags:listForEvent', (_event, eventId) =>
