@@ -6,6 +6,11 @@ export async function listEvents() {
   return getDb().select().from(events);
 }
 
+export async function findEventByName(name) {
+  const result = await getDb().select().from(events).where(eq(events.name, name)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
 export async function listEventsWithSurveyCountsAndTags() {
   const formCounts = getDb()
     .select({

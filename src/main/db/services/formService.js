@@ -63,3 +63,15 @@ export async function createForm(data) {
 export async function deleteForm(id) {
   return getDb().delete(forms).where(eq(forms.id, id)).returning();
 }
+
+export async function updateForm(id, data) {
+  const updateData = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.provider !== undefined) updateData.provider = data.provider;
+  if (data.baseLink !== undefined) updateData.baseLink = data.baseLink;
+  if (data.externalId !== undefined) updateData.externalId = data.externalId;
+  if (data.eventId !== undefined) updateData.eventId = data.eventId;
+  if (data.schema !== undefined) updateData.schema = serializeSchemaValue(data.schema);
+
+  return getDb().update(forms).set(updateData).where(eq(forms.id, id)).returning();
+}

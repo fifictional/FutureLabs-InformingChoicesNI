@@ -7,6 +7,8 @@ import { GoogleFormPicker } from "../components/google-forms/GoogleFormPicker";
 import LaunchIcon from '@mui/icons-material/Launch';
 import { CloudDownload, Refresh, UploadFile } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
+import DeleteSurveyDialog from "../components/surveys/DeleteSurveyDialog";
+import EditSurveyDialog from "../components/surveys/EditSurveyDialog";
 
 export default function Surveys() {
     const theme = useTheme();
@@ -14,6 +16,10 @@ export default function Surveys() {
     // data    
     const [selectedSurvey, setSelectedSurvey] = useState(null);
     const [forms, setForms] = useState([]);
+    const selectedSurveyObject = useMemo(() => {
+        if (!selectedSurvey || !forms) return null;
+        return forms.find(survey => survey.id === selectedSurvey) || null;
+    }, [selectedSurvey, forms]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [refresh, setRefresh] = useState(false);
@@ -35,6 +41,10 @@ export default function Surveys() {
     const [newSurveyName, setNewSurveyName] = useState('');
     const [newSurveyCreationLoading, setNewSurveyCreationLoading] = useState(false);
     const [newSurveyCreationError, setNewSurveyCreationError] = useState(null);
+
+    // survey actions
+    const [deleteSurveyDialogOpen, setDeleteSurveyDialogOpen] = useState(false);
+    const [editSurveyDialogOpen, setEditSurveyDialogOpen] = useState(false);
 
     // excel import
     const excelFileInputRef = useRef(null);
@@ -131,6 +141,7 @@ export default function Surveys() {
         setExcelImportOpen(false);
         setExcelBuffer(null);
         setExcelMeta(null);
+        setRefresh(prev => !prev);
     }
 
     const needsImportEvent = !excelMeta?.hasPerRowEvent;
@@ -159,6 +170,7 @@ export default function Surveys() {
             setCreateSurveyDialogOpen(false);
             setNewSurveyName('');
             window.api.googleForms.openInBrowser(newForm.formId);
+            setRefresh(prev => !prev);
         } catch (err) {
             setNewSurveyCreationError('Failed to create survey. Please try again.');
         } finally {
@@ -233,10 +245,12 @@ export default function Surveys() {
                     </Button>
                     <Menu label="Actions" anchorEl={actionsMenuAnchorEl} open={actionsMenuOpened} onClose={() => setActionsMenuOpened(false)}>
                         <MenuItem disabled={!selectedSurvey} value="view-data">View Data</MenuItem>
-                        <MenuItem disabled={!selectedSurvey} value="view-on-browser">View on Browser</MenuItem>
-                        <MenuItem disabled={!selectedSurvey} value="edit">Edit</MenuItem>
-                        <MenuItem disabled={!selectedSurvey} value="delete">Delete</MenuItem>
+                        <MenuItem disabled={!selectedSurvey || selectedSurveyObject?.provider !== "google_forms"} value="view-on-browser">View on Browser</MenuItem>
+                        <MenuItem disabled={!selectedSurvey} value="edit" onClick={() => setEditSurveyDialogOpen(true)}>Edit Details</MenuItem>
+                        <MenuItem disabled={!selectedSurvey} value="delete" onClick={() => setDeleteSurveyDialogOpen(true)}>Delete</MenuItem>
                     </Menu>
+                    <DeleteSurveyDialog open={deleteSurveyDialogOpen} handleClose={() => setDeleteSurveyDialogOpen(false)} survey={selectedSurveyObject} onDelete={() => setRefresh(prev => !prev)} />
+                    <EditSurveyDialog open={editSurveyDialogOpen} handleClose={() => setEditSurveyDialogOpen(false)} survey={selectedSurveyObject} onEdit={() => setRefresh(prev => !prev)} />
                     <Button variant="contained" endIcon={<AddIcon />} onClick={() => setCreateSurveyDialogOpen(true)}>
                         Create New Survey
                     </Button>

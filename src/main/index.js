@@ -114,6 +114,7 @@ app.on('window-all-closed', () => {
 // Register IPC handlers, which are wired to the service layer
 
 ipcMain.handle('events:list', () => eventService.listEvents());
+ipcMain.handle('events:findByName', (_event, name) => eventService.findEventByName(name));
 ipcMain.handle('events:listWithSurveyCountsAndTags', () =>
   eventService.listEventsWithSurveyCountsAndTags()
 );
@@ -142,6 +143,7 @@ ipcMain.handle('forms:listWithEventNameAndResponseCount', () =>
 ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsByEvent(eventId));
 ipcMain.handle('forms:create', (_event, data) => formService.createForm(data));
 ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id));
+ipcMain.handle('forms:update', (_event, id, data) => formService.updateForm(id, data));
 
 ipcMain.handle('questions:listByForm', (_event, formId) =>
   questionService.listQuestionsByForm(formId)

@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
+import { findEventByName } from '../main/db/services/eventService';
 
 // APIs for renderer
 const api = {
   events: {
     list: () => ipcRenderer.invoke('events:list'),
+    findByName: (name) => ipcRenderer.invoke('events:findByName', name),
     listWithSurveyCountsAndTags: () => ipcRenderer.invoke('events:listWithSurveyCountsAndTags'),
     create: (data) => ipcRenderer.invoke('events:create', data),
     update: (id, data) => ipcRenderer.invoke('events:update', id, data),
@@ -26,7 +28,8 @@ const api = {
       ipcRenderer.invoke('forms:listWithEventNameAndResponseCount'),
     listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),
     create: (data) => ipcRenderer.invoke('forms:create', data),
-    delete: (id) => ipcRenderer.invoke('forms:delete', id)
+    delete: (id) => ipcRenderer.invoke('forms:delete', id),
+    update: (id, data) => ipcRenderer.invoke('forms:update', id, data)
   },
   questions: {
     listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),
