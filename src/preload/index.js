@@ -45,6 +45,10 @@ const api = {
   googleForms: {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
   },
+  surveys: {
+    parseExcelImport: (buffer) => ipcRenderer.invoke('surveys:parseExcelImport', buffer),
+    commitExcelImport: (payload) => ipcRenderer.invoke('surveys:commitExcelImport', payload)
+  },
   googleAuth: {
     isUserAuthenticated: () => ipcRenderer.invoke('googleAuth:isUserAuthenticated'),
     ensureAuthenticated: () => ipcRenderer.invoke('googleAuth:ensureAuthenticated'),
