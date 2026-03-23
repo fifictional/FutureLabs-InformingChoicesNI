@@ -23,7 +23,6 @@ export default function Surveys() {
 
     // sort and filter 
     const [filterValue, setFilterValue] = useState('');
-    const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState(null);
 
     // import menu
     const [googleFormPickerOpen, setGoogleFormPickerOpen] = useState(false);
@@ -32,8 +31,9 @@ export default function Surveys() {
 
     // create new survey
     const [createSurveyDialogOpen, setCreateSurveyDialogOpen] = useState(false);
-    const [newSurveyTitle, setNewSurveyTitle] = useState('');
+    const [newSurveyName, setNewSurveyName] = useState('');
 
+    // excel import
     const excelFileInputRef = useRef(null);
     const [excelImportOpen, setExcelImportOpen] = useState(false);
     const [excelBuffer, setExcelBuffer] = useState(null);
@@ -199,13 +199,13 @@ export default function Surveys() {
                             <Typography variant="body1" mb={1}>
                                 This action creates a new blank survey in your Google Drive with the given title and imports it into this app. You will then automatically be redirected to the Google Forms editor to customize your survey and add questions.
                             </Typography>
-                            <TextField onChange={(e) => setNewSurveyTitle(e.target.value)}  fullWidth label="Survey Title" variant="outlined" margin="normal" />
+                            <TextField onChange={(e) => setNewSurveyName(e.target.value)} fullWidth label="Survey Name" variant="outlined" margin="normal" />
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={() => setCreateSurveyDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button disabled={!newSurveyTitle} onClick={() => setCreateSurveyDialogOpen(false)} variant="contained" color="primary">
+                            <Button disabled={!newSurveyName} onClick={() => setCreateSfurveyDialogOpen(false)} variant="contained" color="primary">
                                 Create
                             </Button>
                         </DialogActions>
@@ -262,7 +262,7 @@ export default function Surveys() {
                                     {excelMeta.hasPerRowEvent ? ' (event per row from sheet or default below)' : ''}
                                 </Typography>
                             )}
-                            <TextField margin="dense" label="Form name" fullWidth required value={importFormName} onChange={(e) => setImportFormName(e.target.value)} />
+                            <TextField margin="dense" label="Survey Name" fullWidth value={importFormName} onChange={(e) => setImportFormName(e.target.value)} />
                             <TextField
                                 margin="dense"
                                 label={excelMeta?.hasPerRowEvent ? 'Default event name (for blank cells)' : 'Event name'}
@@ -278,9 +278,7 @@ export default function Surveys() {
                                 value={importEventDesc}
                                 onChange={(e) => setImportEventDesc(e.target.value)}
                             />
-                            {importErr ? (
-                                <Typography color="error" variant="body2" sx={{ mt: 1 }}>{importErr}</Typography>
-                            ) : null}
+                            {importErr && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{importErr}</Typography> }
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={() => { if (!importBusy) { setExcelImportOpen(false); setExcelBuffer(null); setExcelMeta(null); } }} disabled={importBusy}>Cancel</Button>
@@ -310,29 +308,6 @@ export default function Surveys() {
                         onInputChange={(_event, newInputValue) => setFilterValue(newInputValue)}
                         inputValue={filterValue}
                     />
-                    <Button 
-                        aria-controls="google-forms-picker-sort-menu"
-                        aria-haspopup="true"
-                        aria-expanded={Boolean(sortMenuAnchorEl)}
-                        color="primary" 
-                        variant="outlined"
-                        disabled={loading} 
-                        onClick={(e) => setSortMenuAnchorEl(e.currentTarget)}
-                        startIcon={<SortIcon />}
-                    >
-                        Sort  
-                    </Button>
-                    <Menu
-                        id="google-forms-picker-sort-menu"
-                        anchorEl={sortMenuAnchorEl}
-                        open={Boolean(sortMenuAnchorEl)}
-                        onClose={() => setSortMenuAnchorEl(null)}
-                    >
-                        <MenuItem onClick={() => handleSortSelect("modifiedTimeDesc")}>modified time newest</MenuItem>
-                        <MenuItem onClick={() => handleSortSelect("modifiedTimeAsc")}>modified time oldest</MenuItem>
-                        <MenuItem onClick={() => handleSortSelect("nameAsc")}>name A-Z</MenuItem>
-                        <MenuItem onClick={() => handleSortSelect("nameDesc")}>name Z-A</MenuItem>
-                    </Menu>
                     <Button 
                         color="primary" 
                         onClick={() => setRefresh(prev => !prev)} 

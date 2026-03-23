@@ -94,6 +94,7 @@ export default function EditTagsDialog({ open, handleClose, event, onEdit, ...pr
                 </Stack>
                 {error && <Typography color="error">{error}</Typography>}
                 <Typography variant="h6" mt={2}>Current Tags:</Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" my={2}>
                 {eventTags.length === 0 ? (
                     <Typography>No tags assigned to this event.</Typography>
                 ) : (
@@ -101,6 +102,7 @@ export default function EditTagsDialog({ open, handleClose, event, onEdit, ...pr
                         <Chip key={tag.id} variant="outlined" color="primary" label={tag.name} onDelete={() => onTagDelete(tag.id)} />
                     ))
                 )}
+                </Stack>
             </DialogContent>
             <DialogActions>
                 <Button onClick={handleClose}>Close</Button>

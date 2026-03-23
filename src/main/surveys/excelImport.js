@@ -5,7 +5,6 @@ import * as questionService from '../db/services/questionService.js';
 import * as submissionService from '../db/services/submissionService.js';
 import * as responseService from '../db/services/responseService.js';
 
-
 export function parseExcelImport(bufferLike) {
   let buffer;
   if (!bufferLike) throw new Error('No file data');
@@ -26,7 +25,8 @@ export function parseExcelImport(bufferLike) {
   const timeCol = headerRow.findIndex((h) => /^(timestamp|submitted at|date|submitted)$/i.test(h));
   const questionIndices = [];
   for (let i = 0; i < headerRow.length; i++) {
-    if (i !== formCol && i !== eventCol && i !== timeCol && headerRow[i] !== '') questionIndices.push(i);
+    if (i !== formCol && i !== eventCol && i !== timeCol && headerRow[i] !== '')
+      questionIndices.push(i);
   }
   const headers = questionIndices.map((i) => headerRow[i] || `Column ${i + 1}`);
   let suggestedFormName = '';
@@ -71,7 +71,8 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
   const timeCol = headerRow.findIndex((h) => /^(timestamp|submitted at|date|submitted)$/i.test(h));
   const questionIndices = [];
   for (let i = 0; i < headerRow.length; i++) {
-    if (i !== formCol && i !== eventCol && i !== timeCol && headerRow[i] !== '') questionIndices.push(i);
+    if (i !== formCol && i !== eventCol && i !== timeCol && headerRow[i] !== '')
+      questionIndices.push(i);
   }
   const dataRows = rows.slice(1);
 
@@ -87,7 +88,9 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
     const all = await eventService.listEvents();
     let ev = all.find((e) => e.name === nameTrim);
     if (!ev) {
-      ev = (await eventService.createEvent({ name: nameTrim, description: eventDescription || null }))[0];
+      ev = (
+        await eventService.createEvent({ name: nameTrim, description: eventDescription || null })
+      )[0];
     }
 
     const existing = await formService.listForms();
@@ -185,7 +188,9 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
           ? String(row[eventCol]).trim()
           : dialogEvent;
       if (!fromCell) {
-        throw new Error('Event name missing for a row: fill the Event column or the default event below');
+        throw new Error(
+          'Event name missing for a row: fill the Event column or the default event below'
+        );
       }
       if (!groups.has(fromCell)) groups.set(fromCell, []);
       groups.get(fromCell).push(row);
