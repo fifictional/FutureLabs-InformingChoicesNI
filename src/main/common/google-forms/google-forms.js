@@ -1,5 +1,6 @@
 import { forms } from '@googleapis/forms';
 import { getGoogleAuthClient } from './google-auth-client';
+import { shell } from 'electron';
 
 async function getGoogleFormsService() {
   const authClient = await getGoogleAuthClient();
@@ -74,4 +75,13 @@ export async function getGoogleFormResponseById(formId, responseId) {
   const formsService = await getGoogleFormsService();
   const response = await formsService.forms.responses.get({ formId, responseId });
   return response.data;
+}
+
+export async function openGoogleFormInBrowser(formId) {
+  if (formId) {
+    const newLink = `https://docs.google.com/forms/d/${formId}/edit`;
+    shell.openExternal(newLink);
+  } else {
+    throw new Error('Form not found or does not have a responder URI');
+  }
 }

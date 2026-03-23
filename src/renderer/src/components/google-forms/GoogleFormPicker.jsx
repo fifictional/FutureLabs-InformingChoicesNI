@@ -1,4 +1,4 @@
-import { Autocomplete, Button, Card, CardActionArea, CardHeader, CardMedia, Container, css, Divider, IconButton, Menu, MenuItem, Stack, TextField, Typography, useTheme } from "@mui/material";
+import { Autocomplete, Button, Card, CardActionArea, CardHeader, CardMedia, Container, css, Divider, Grid, IconButton, Menu, MenuItem, Stack, TextField, Typography, useTheme } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -91,6 +91,7 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
         cursor: pointer;
         box-sizing: border-box;
         width: 300px;
+
         @media (max-width: 600px) {
             width: 100%;
         }
@@ -98,6 +99,11 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
         & .MuiCardActionArea-root[data-selected="true"] {
             outline: 2px solid ${theme.palette.primary.main};
             outline-offset: -2px;
+        }
+
+        
+        & .MuiTypography-root {
+            width: 220px;
         }
     `;
     // endregion
@@ -199,19 +205,19 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                     </Button>
                 </Stack>
                 <Divider />
-                <Stack padding="1em 0" flexWrap="wrap" spacing={3} direction="row" justifyContent="flex-start" alignItems="stretch">
+                <Grid padding="1em 0" container spacing={3} justifyContent={"space-between"}>
                     {loading && <Typography>Loading...</Typography>}
                     {error && <Typography color="error">Error: {error}</Typography>}
                     {!loading && !error && displayedForms.length === 0 && <Typography>No forms found.</Typography>}
                     {!loading && !error && displayedForms.map(form => (
                         <Card elevation={1} key={form.id} css={cardStyle}>
                             <CardActionArea data-selected={selectedFormIds.includes(form.id)} onClick={() => toggleSelectCard(form.id)}>
-                                <CardHeader avatar={<img src={form.iconLink}/>} title={form.name || "Untitled Form"} subheader={`Modified: ${new Date(form.modifiedTime).toDateString() || "N/A"}`} />
+                                <CardHeader slotProps={{title: { noWrap: true }, subheader: { noWrap: true }}} avatar={<img src={form.iconLink}/>} title={form.name || "Untitled Form"} subheader={`Modified: ${new Date(form.modifiedTime).toDateString() || "N/A"}`} />
                                 <CardMedia component="img" image={form.thumbnailBase64} alt={`${form.name} thumbnail`} />
                             </CardActionArea>
                         </Card>
                     ))}
-                </Stack>
+                </Grid>
             </Stack>
         </Container>
     )

@@ -4,9 +4,8 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleFormPicker } from "../components/google-forms/GoogleFormPicker";
-import SortIcon from '@mui/icons-material/Sort';
 import LaunchIcon from '@mui/icons-material/Launch';
-import { CloudDownload, UploadFile } from "@mui/icons-material";
+import { CloudDownload, Refresh, UploadFile } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 
 export default function Surveys() {
@@ -16,6 +15,8 @@ export default function Surveys() {
     const [selectedSurvey, setSelectedSurvey] = useState(null);
     const [forms, setForms] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [refresh, setRefresh] = useState(false);
 
     // actions menu
     const [actionsMenuOpened, setActionsMenuOpened] = useState(false);
@@ -32,6 +33,8 @@ export default function Surveys() {
     // create new survey
     const [createSurveyDialogOpen, setCreateSurveyDialogOpen] = useState(false);
     const [newSurveyName, setNewSurveyName] = useState('');
+    const [newSurveyCreationLoading, setNewSurveyCreationLoading] = useState(false);
+    const [newSurveyCreationError, setNewSurveyCreationError] = useState(null);
 
     // excel import
     const excelFileInputRef = useRef(null);
@@ -52,6 +55,44 @@ export default function Surveys() {
             setImportErr('');
         }
     }, [excelImportOpen, excelMeta]);
+
+    useEffect(() => {
+        async function fetchForms() {
+            setLoading(true);
+            try {
+                const formList = await window.api.forms.listWithEventNameAndResponseCount();
+                setForms(formList);
+            } catch (err) {
+                console.error('Failed to fetch forms', err);
+                window.alert('Failed to fetch forms. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchForms();
+    }, [refresh]);
+
+    const providerToSource = (form) => {
+        switch (form.provider) {
+            case 'google_forms':
+                return 'Google Forms';
+            case 'local':
+                return 'Local' + (form?.schema?.source ? ` (${form.schema.source})` : '');
+            default:
+                return form.provider || 'Unknown';
+        }
+    };
+
+    const buildRows = useMemo(() => {
+        return forms.map(form => ({
+            id: form.id,
+            name: form.name,
+            event: form.eventName || '',
+            source: providerToSource(form) || 'Unknown',
+            ResponseCount: form.responseCount || 0,
+            webViewLink: form.baseLink || ''
+        }));
+    }, [forms]);
 
     async function handleExcelFileChosen(e) {
         const file = e.target.files?.[0];
@@ -107,7 +148,23 @@ export default function Surveys() {
     const handleImportClick = (event) => {
         setImportMenuAnchorEl(event.currentTarget);
         setImportMenuOpened(true);
-    }
+    };
+
+    const handleCreateSurveySubmit = async () => {
+        setNewSurveyCreationLoading(true);
+        setNewSurveyCreationError(null);
+        if (!newSurveyName.trim()) return;
+        try {
+            const newForm = await window.api.googleForms.create(newSurveyName.trim(), newSurveyName.trim());
+            setCreateSurveyDialogOpen(false);
+            setNewSurveyName('');
+            window.api.googleForms.openInBrowser(newForm.formId);
+        } catch (err) {
+            setNewSurveyCreationError('Failed to create survey. Please try again.');
+        } finally {
+            setNewSurveyCreationLoading(false);
+        }
+    };
 
   const backgroundStyle = css`
     background-color: #f5f5f5;
@@ -119,7 +176,6 @@ export default function Surveys() {
     margin: 0 auto;
     padding: 2rem;
   `;
-
   
     const toolbarStyle = css`
         padding: 0.5em 0;
@@ -147,9 +203,8 @@ export default function Surveys() {
 
     const dataGridColumns = [
         { field: 'name', headerName: 'Name', flex: 1 },
-        { field: 'Event', headerName: 'Event', width: 300 },
+        { field: 'event', headerName: 'Event', width: 300 },
         { field: "source", headerName: "Source", width: 150 },
-        { field: 'modifiedTime', headerName: 'Modified Time', width: 180 },
         { field: 'ResponseCount', headerName: 'Responses', width: 120 },
         { field: 'webViewLink', headerName: 'Link', width: 100, renderCell: (params) => (
             <IconButton 
@@ -160,14 +215,6 @@ export default function Surveys() {
             </IconButton>
         )}
     ];
-
-    const dataGridExampleRow = [
-        { id: 1, name: 'Customer Satisfaction Survey', Event: 'Customer Feedback', source: "Google Forms", modifiedTime: '2024-06-01', ResponseCount: 120, webViewLink: 'https://docs.google.com/forms/d/1abc123/viewform' },
-    ]
-
-    useEffect(() => {
-        console.log("Selected survey changed:", selectedSurvey);
-    }, [selectedSurvey]);
 
     return (
         <>
@@ -200,12 +247,13 @@ export default function Surveys() {
                                 This action creates a new blank survey in your Google Drive with the given title and imports it into this app. You will then automatically be redirected to the Google Forms editor to customize your survey and add questions.
                             </Typography>
                             <TextField onChange={(e) => setNewSurveyName(e.target.value)} fullWidth label="Survey Name" variant="outlined" margin="normal" />
+                            {newSurveyCreationError && <Typography color="error" variant="body2">{newSurveyCreationError}</Typography>}
                         </DialogContent>
                         <DialogActions>
-                            <Button onClick={() => setCreateSurveyDialogOpen(false)}>
+                            <Button disabled={newSurveyCreationLoading} onClick={() => setCreateSurveyDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button disabled={!newSurveyName} onClick={() => setCreateSfurveyDialogOpen(false)} variant="contained" color="primary">
+                            <Button disabled={!newSurveyName || newSurveyCreationLoading} onClick={() => handleCreateSurveySubmit()} variant="contained" color="primary">
                                 Create
                             </Button>
                         </DialogActions>
@@ -285,7 +333,7 @@ export default function Surveys() {
                             <Button variant="contained" onClick={handleExcelImportSubmit} disabled={!canDoImport}>Import</Button>
                         </DialogActions>
                     </Dialog>
-                    <Dialog open={googleFormPickerOpen} onClose={() => setGoogleFormPickerOpen(false)} fullWidth maxWidth="md">
+                    <Dialog open={googleFormPickerOpen} onClose={() => setGoogleFormPickerOpen(false)} fullWidth maxWidth="lg">
                         <GoogleFormPicker onCancel={() => setGoogleFormPickerOpen(false)} />
                     </Dialog>
                 </Stack>
@@ -320,7 +368,7 @@ export default function Surveys() {
                 </Stack>
                 <DataGrid 
                     columns={dataGridColumns} 
-                    rows={dataGridExampleRow}
+                    rows={buildRows}
                     onRowSelectionModelChange={(newSelection) => setSelectedSurvey(newSelection.ids?.values()?.next()?.value || null)}
                 />
             </Box>

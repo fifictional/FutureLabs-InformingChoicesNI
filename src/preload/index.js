@@ -22,6 +22,8 @@ const api = {
   },
   forms: {
     list: () => ipcRenderer.invoke('forms:list'),
+    listWithEventNameAndResponseCount: () =>
+      ipcRenderer.invoke('forms:listWithEventNameAndResponseCount'),
     listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),
     create: (data) => ipcRenderer.invoke('forms:create', data),
     delete: (id) => ipcRenderer.invoke('forms:delete', id)
@@ -43,7 +45,10 @@ const api = {
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
   },
   googleForms: {
-    list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
+    list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
+    create: (title, document_title) =>
+      ipcRenderer.invoke('googleForms:create', title, document_title),
+    openInBrowser: (formId) => ipcRenderer.invoke('googleForms:openInBrowser', formId)
   },
   surveys: {
     parseExcelImport: (buffer) => ipcRenderer.invoke('surveys:parseExcelImport', buffer),
