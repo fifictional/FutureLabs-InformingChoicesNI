@@ -15,7 +15,9 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:linux": "npm run build && electron-builder --linux",
+    "drizzle:generate": "drizzle-kit generate",
+    "drizzle:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -34,11 +36,14 @@
     "leaflet": "^1.9.4",
     "react-leaflet": "^5.0.0",
     "react-router": "^7.13.1",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "xlsx": "^0.18.5",
+    "slugify": "^1.6.8"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^2.1.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
+    "@electron/rebuild": "^4.0.3",
     "@vitejs/plugin-react": "^5.1.1",
     "drizzle-kit": "^0.31.9",
     "electron": "^39.2.6",

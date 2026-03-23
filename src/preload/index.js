@@ -5,12 +5,14 @@ import { electronAPI } from '@electron-toolkit/preload';
 const api = {
   events: {
     list: () => ipcRenderer.invoke('events:list'),
+    listWithSurveyCountsAndTags: () => ipcRenderer.invoke('events:listWithSurveyCountsAndTags'),
     create: (data) => ipcRenderer.invoke('events:create', data),
     update: (id, data) => ipcRenderer.invoke('events:update', id, data),
     delete: (id) => ipcRenderer.invoke('events:delete', id)
   },
   eventTags: {
     list: () => ipcRenderer.invoke('eventTags:list'),
+    findBySlug: (slug) => ipcRenderer.invoke('eventTags:findBySlug', slug),
     create: (data) => ipcRenderer.invoke('eventTags:create', data),
     delete: (id) => ipcRenderer.invoke('eventTags:delete', id),
     listForEvent: (eventId) => ipcRenderer.invoke('eventTags:listForEvent', eventId),
@@ -42,6 +44,10 @@ const api = {
   },
   googleForms: {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
+  },
+  surveys: {
+    parseExcelImport: (buffer) => ipcRenderer.invoke('surveys:parseExcelImport', buffer),
+    commitExcelImport: (payload) => ipcRenderer.invoke('surveys:commitExcelImport', payload)
   },
   googleAuth: {
     isUserAuthenticated: () => ipcRenderer.invoke('googleAuth:isUserAuthenticated'),

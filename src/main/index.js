@@ -17,6 +17,7 @@ import {
   getUserProfile,
   isUserAuthenticated
 } from './common/google-forms/google-auth-client.js';
+import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
 
 let mainWindow;
 
@@ -112,11 +113,15 @@ app.on('window-all-closed', () => {
 // Register IPC handlers, which are wired to the service layer
 
 ipcMain.handle('events:list', () => eventService.listEvents());
+ipcMain.handle('events:listWithSurveyCountsAndTags', () =>
+  eventService.listEventsWithSurveyCountsAndTags()
+);
 ipcMain.handle('events:create', (_event, data) => eventService.createEvent(data));
 ipcMain.handle('events:update', (_event, id, data) => eventService.updateEvent(id, data));
 ipcMain.handle('events:delete', (_event, id) => eventService.deleteEvent(id));
 
 ipcMain.handle('eventTags:list', () => eventTagService.listEventTags());
+ipcMain.handle('eventTags:findBySlug', (_event, slug) => eventTagService.findEventTagBySlug(slug));
 ipcMain.handle('eventTags:create', (_event, data) => eventTagService.createEventTag(data));
 ipcMain.handle('eventTags:delete', (_event, id) => eventTagService.deleteEventTag(id));
 ipcMain.handle('eventTags:listForEvent', (_event, eventId) =>
@@ -159,6 +164,24 @@ ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
 
 // google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
+
+// excel survey import
+ipcMain.handle('surveys:parseExcelImport', (_event, buffer) => {
+  try {
+    return { ok: true, ...parseExcelImport(buffer) };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
+ipcMain.handle('surveys:commitExcelImport', async (_event, payload) => {
+  try {
+    const { buffer, formName, eventName, eventDescription } = payload || {};
+    const result = await commitExcelImport(buffer, { formName, eventName, eventDescription });
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
 
 // Window management
 ipcMain.on('window:minimize', () => {
