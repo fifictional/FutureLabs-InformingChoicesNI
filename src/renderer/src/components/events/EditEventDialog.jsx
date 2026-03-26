@@ -31,7 +31,7 @@ export default function EditEventDialog({ open, handleClose, event, onEdit, ...p
             setNewEventDescription(event.description || '');
             setError(null);
         }
-    }, [event]);
+    }, [event]);    
 
     if (!event) {
         return null;

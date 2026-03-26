@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
+import { findEventByName } from '../main/db/services/eventService';
 
 // APIs for renderer
 const api = {
   events: {
     list: () => ipcRenderer.invoke('events:list'),
+    findByName: (name) => ipcRenderer.invoke('events:findByName', name),
     listWithSurveyCountsAndTags: () => ipcRenderer.invoke('events:listWithSurveyCountsAndTags'),
     create: (data) => ipcRenderer.invoke('events:create', data),
     update: (id, data) => ipcRenderer.invoke('events:update', id, data),
@@ -22,9 +24,12 @@ const api = {
   },
   forms: {
     list: () => ipcRenderer.invoke('forms:list'),
+    listWithEventNameAndResponseCount: () =>
+      ipcRenderer.invoke('forms:listWithEventNameAndResponseCount'),
     listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),
     create: (data) => ipcRenderer.invoke('forms:create', data),
-    delete: (id) => ipcRenderer.invoke('forms:delete', id)
+    delete: (id) => ipcRenderer.invoke('forms:delete', id),
+    update: (id, data) => ipcRenderer.invoke('forms:update', id, data)
   },
   questions: {
     listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),
@@ -43,7 +48,10 @@ const api = {
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
   },
   googleForms: {
-    list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken)
+    list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
+    create: (title, document_title) =>
+      ipcRenderer.invoke('googleForms:create', title, document_title),
+    openInBrowser: (formId) => ipcRenderer.invoke('googleForms:openInBrowser', formId)
   },
   surveys: {
     parseExcelImport: (buffer) => ipcRenderer.invoke('surveys:parseExcelImport', buffer),

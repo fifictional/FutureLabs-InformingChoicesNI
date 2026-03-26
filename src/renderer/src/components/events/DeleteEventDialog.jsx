@@ -2,11 +2,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography }
 import { useState } from "react";
 
 
-export default function DeleteEventDialog({ open, handleClose, event, onDelete, ...props }) {
-    if (!event) {
-        return null;
-    }
-    
+export default function DeleteEventDialog({ open, handleClose, event, onDelete, ...props }) {    
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -26,6 +22,10 @@ export default function DeleteEventDialog({ open, handleClose, event, onDelete, 
             setLoading(false);
         }
     };
+
+    if (!event) {
+        return null;
+    }
 
     return (
         <>

@@ -12,6 +12,7 @@ import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
+import { createGoogleForm, openGoogleFormInBrowser } from './common/google-forms/google-forms.js';
 import {
   ensureAuthenticated,
   getUserProfile,
@@ -113,6 +114,7 @@ app.on('window-all-closed', () => {
 // Register IPC handlers, which are wired to the service layer
 
 ipcMain.handle('events:list', () => eventService.listEvents());
+ipcMain.handle('events:findByName', (_event, name) => eventService.findEventByName(name));
 ipcMain.handle('events:listWithSurveyCountsAndTags', () =>
   eventService.listEventsWithSurveyCountsAndTags()
 );
@@ -135,9 +137,13 @@ ipcMain.handle('eventTags:removeFromEvent', (_event, eventId, tagId) =>
 );
 
 ipcMain.handle('forms:list', () => formService.listForms());
+ipcMain.handle('forms:listWithEventNameAndResponseCount', () =>
+  formService.listFormWithEventNameAndResponseCount()
+);
 ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsByEvent(eventId));
 ipcMain.handle('forms:create', (_event, data) => formService.createForm(data));
 ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id));
+ipcMain.handle('forms:update', (_event, id, data) => formService.updateForm(id, data));
 
 ipcMain.handle('questions:listByForm', (_event, formId) =>
   questionService.listQuestionsByForm(formId)
@@ -164,6 +170,10 @@ ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
 
 // google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
+ipcMain.handle('googleForms:create', (_event, title, document_title) =>
+  createGoogleForm(title, document_title)
+);
+ipcMain.handle('googleForms:openInBrowser', (_event, formId) => openGoogleFormInBrowser(formId));
 
 // excel survey import
 ipcMain.handle('surveys:parseExcelImport', (_event, buffer) => {

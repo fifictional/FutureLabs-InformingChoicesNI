@@ -110,7 +110,7 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
     });
     const [form] = await formService.createForm({
       name: fname,
-      provider: 'google_forms',
+      provider: 'local',
       baseLink: 'https://invalid.invalid/excel-import',
       externalId: extId,
       eventId: ev.id,
