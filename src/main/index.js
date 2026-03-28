@@ -19,6 +19,7 @@ import {
   isUserAuthenticated
 } from './common/google-forms/google-auth-client.js';
 import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
+import { importGoogleForms } from './surveys/googleFormsImport.js';
 
 let mainWindow;
 
@@ -175,6 +176,15 @@ ipcMain.handle('googleForms:create', (_event, title, document_title) =>
   createGoogleForm(title, document_title)
 );
 ipcMain.handle('googleForms:openInBrowser', (_event, formId) => openGoogleFormInBrowser(formId));
+ipcMain.handle('googleForms:importSelected', async (_event, payload) => {
+  try {
+    const { formIds, eventName, eventDescription, formNameOverride } = payload || {};
+    const result = await importGoogleForms(formIds, { eventName, eventDescription, formNameOverride });
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
 
 // excel survey import
 ipcMain.handle('surveys:parseExcelImport', (_event, buffer) => {

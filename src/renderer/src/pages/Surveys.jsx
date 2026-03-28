@@ -31,6 +31,14 @@ export default function Surveys() {
   const [deleteSurveyDialogOpen, setDeleteSurveyDialogOpen] = useState(false);
   const [editSurveyDialogOpen, setEditSurveyDialogOpen] = useState(false);
 
+  const [googleImportDialogOpen, setGoogleImportDialogOpen] = useState(false);
+  const [googleImportPendingIds, setGoogleImportPendingIds] = useState(null);
+  const [googleImportEventName, setGoogleImportEventName] = useState("");
+  const [googleImportEventDesc, setGoogleImportEventDesc] = useState("");
+  const [googleImportFormName, setGoogleImportFormName] = useState("");
+  const [googleImportBusy, setGoogleImportBusy] = useState(false);
+  const [googleImportErr, setGoogleImportErr] = useState("");
+
   const excelFileInputRef = useRef(null);
   const [excelImportOpen, setExcelImportOpen] = useState(false);
   const [excelBuffer, setExcelBuffer] = useState(null);
@@ -154,6 +162,52 @@ export default function Surveys() {
     setRefresh((prev) => !prev);
   }
 
+  function handleGoogleFormsPickedForImport(selectedFormIds) {
+    if (!selectedFormIds?.length) return;
+    setGoogleImportPendingIds(selectedFormIds);
+    setGoogleImportEventName("");
+    setGoogleImportEventDesc("");
+    setGoogleImportFormName("");
+    setGoogleImportErr("");
+    setGoogleFormPickerOpen(false);
+    setGoogleImportDialogOpen(true);
+  }
+
+  function closeGoogleImportDialog() {
+    if (googleImportBusy) return;
+    setGoogleImportDialogOpen(false);
+    setGoogleImportPendingIds(null);
+    setGoogleImportErr("");
+  }
+
+  async function confirmGoogleImport() {
+    if (!googleImportPendingIds?.length) return;
+    if (!googleImportEventName.trim()) {
+      setGoogleImportErr("Event name is required.");
+      return;
+    }
+    setGoogleImportBusy(true);
+    setGoogleImportErr("");
+    try {
+      const res = await window.api.googleForms.importSelected({
+        formIds: googleImportPendingIds,
+        eventName: googleImportEventName.trim(),
+        eventDescription: googleImportEventDesc.trim() || undefined,
+        formNameOverride: googleImportFormName.trim() || undefined,
+      });
+      if (!res?.ok) {
+        setGoogleImportErr(res?.error || "Import failed");
+        return;
+      }
+      closeGoogleImportDialog();
+      triggerRefresh();
+    } catch (e) {
+      setGoogleImportErr(e?.message || String(e));
+    } finally {
+      setGoogleImportBusy(false);
+    }
+  }
+
   function closeExcelImportDialog() {
     if (importBusy) return;
     setExcelImportOpen(false);
@@ -201,6 +255,18 @@ export default function Surveys() {
           handleCreateSurveySubmit={handleCreateSurveySubmit}
           googleFormPickerOpen={googleFormPickerOpen}
           setGoogleFormPickerOpen={setGoogleFormPickerOpen}
+          onGoogleFormsPickedForImport={handleGoogleFormsPickedForImport}
+          googleImportDialogOpen={googleImportDialogOpen}
+          googleImportEventName={googleImportEventName}
+          setGoogleImportEventName={setGoogleImportEventName}
+          googleImportEventDesc={googleImportEventDesc}
+          setGoogleImportEventDesc={setGoogleImportEventDesc}
+          googleImportFormName={googleImportFormName}
+          setGoogleImportFormName={setGoogleImportFormName}
+          googleImportBusy={googleImportBusy}
+          googleImportErr={googleImportErr}
+          onCloseGoogleImportDialog={closeGoogleImportDialog}
+          onConfirmGoogleImport={confirmGoogleImport}
           excelFileInputRef={excelFileInputRef}
           handleExcelFileChosen={handleExcelFileChosen}
           excelImportOpen={excelImportOpen}

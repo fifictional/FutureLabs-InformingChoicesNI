@@ -40,7 +40,7 @@ export function getAppUserDataPath(...segments) {
   return path.join(app.getPath('userData'), ...segments);
 }
 
-export function createOAuthClient() {
+export function createOAuthClient(redirectUriOverride) {
   const credentials = getCredentials();
   const config = credentials.installed || credentials.web;
 
@@ -51,7 +51,7 @@ export function createOAuthClient() {
   return new OAuth2Client({
     clientId: config.client_id,
     clientSecret: config.client_secret,
-    redirectUri: config.redirect_uris?.[0] || 'http://localhost'
+    redirectUri: redirectUriOverride || config.redirect_uris?.[0] || 'http://localhost'
   });
 }
 
@@ -64,11 +64,15 @@ export function getOAuthRedirectUri() {
 export async function runInteractiveOAuthFlow({
   scopes,
   onTokens,
-  successMessage = 'Google authorization successful. You can close this window.',
+  successMessage = 'Google authorisation successful. You can close this window.',
   buildAuthUrl,
   onCallback
 }) {
   const redirectUri = getOAuthRedirectUri();
+  const parsed = new URL(redirectUri);
+  const hostname = parsed.hostname || '127.0.0.1';
+  const port = parsed.port ? Number(parsed.port) : 3000;
+  const runtimeRedirectUri = `${parsed.protocol}//${hostname}:${port}${parsed.pathname || ''}`;
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
@@ -79,7 +83,7 @@ export async function runInteractiveOAuthFlow({
           return;
         }
 
-        const requestUrl = new URL(req.url, redirectUri);
+        const requestUrl = new URL(req.url, runtimeRedirectUri);
         const code = requestUrl.searchParams.get('code');
         const error = requestUrl.searchParams.get('error');
 
@@ -93,11 +97,11 @@ export async function runInteractiveOAuthFlow({
 
         if (!code) {
           res.statusCode = 400;
-          res.end('Missing authorization code');
+          res.end('Missing authorisation code');
           return;
         }
 
-        const client = createOAuthClient();
+        const client = createOAuthClient(runtimeRedirectUri);
         const { tokens } = await client.getToken(code);
         client.setCredentials(tokens);
 
@@ -116,7 +120,7 @@ export async function runInteractiveOAuthFlow({
       } catch (error) {
         try {
           res.statusCode = 500;
-          res.end('Authorization failed');
+          res.end('Authorisation failed');
         } catch {
           // Ignore response write errors
         }
@@ -127,13 +131,9 @@ export async function runInteractiveOAuthFlow({
 
     server.on('error', reject);
 
-    const parsed = new URL(redirectUri);
-    const hostname = parsed.hostname;
-    const port = parsed.port ? Number(parsed.port) : 80;
-
     server.listen(port, hostname, async () => {
       try {
-        const client = createOAuthClient();
+        const client = createOAuthClient(runtimeRedirectUri);
 
         const defaultAuthUrl = client.generateAuthUrl({
           access_type: 'offline',

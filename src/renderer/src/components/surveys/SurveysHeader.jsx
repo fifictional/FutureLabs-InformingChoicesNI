@@ -1,12 +1,16 @@
 import {
   Button,
   Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -50,6 +54,19 @@ export default function SurveysHeader(props) {
 
     googleFormPickerOpen,
     setGoogleFormPickerOpen,
+    onGoogleFormsPickedForImport,
+
+    googleImportDialogOpen,
+    googleImportEventName,
+    setGoogleImportEventName,
+    googleImportEventDesc,
+    setGoogleImportEventDesc,
+    googleImportFormName,
+    setGoogleImportFormName,
+    googleImportBusy,
+    googleImportErr,
+    onCloseGoogleImportDialog,
+    onConfirmGoogleImport,
 
     excelFileInputRef,
     handleExcelFileChosen,
@@ -209,7 +226,63 @@ export default function SurveysHeader(props) {
       />
 
       <Dialog open={googleFormPickerOpen} onClose={() => setGoogleFormPickerOpen(false)} fullWidth maxWidth="lg">
-        <GoogleFormPicker onCancel={() => setGoogleFormPickerOpen(false)} />
+        <GoogleFormPicker
+          onCancel={() => setGoogleFormPickerOpen(false)}
+          onSubmit={(ids) => {
+            onGoogleFormsPickedForImport?.(ids);
+          }}
+        />
+      </Dialog>
+
+      <Dialog open={googleImportDialogOpen} onClose={onCloseGoogleImportDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Import Google Forms</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Choose an event for the imported forms. A new event is created if the name does not exist yet.
+          </Typography>
+          <TextField
+            margin="dense"
+            label="Survey name (optional)"
+            fullWidth
+            value={googleImportFormName}
+            onChange={(e) => setGoogleImportFormName(e.target.value)}
+            disabled={googleImportBusy}
+          />
+          <TextField
+            margin="dense"
+            label="Event name"
+            fullWidth
+            required
+            value={googleImportEventName}
+            onChange={(e) => setGoogleImportEventName(e.target.value)}
+            disabled={googleImportBusy}
+          />
+          <TextField
+            margin="dense"
+            label="Event description (optional)"
+            fullWidth
+            value={googleImportEventDesc}
+            onChange={(e) => setGoogleImportEventDesc(e.target.value)}
+            disabled={googleImportBusy}
+          />
+          {googleImportErr ? (
+            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+              {googleImportErr}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onCloseGoogleImportDialog} disabled={googleImportBusy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onConfirmGoogleImport}
+            disabled={googleImportBusy || !googleImportEventName.trim()}
+          >
+            Import
+          </Button>
+        </DialogActions>
       </Dialog>
     </Stack>
   );
