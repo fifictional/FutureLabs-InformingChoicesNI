@@ -106,7 +106,7 @@ export default function AppBarLayout({ children }) {
 
     return (
         <>
-        <AppBar css={appBarStyle} position="static">
+        <AppBar css={appBarStyle} position="fixed">
             <Toolbar>
                 <Stack css={menusStyle} direction="row" alignItems="center" justifyContent="start">
                     <IconButton css={menuButtonStyle}><MenuIcon /></IconButton>
@@ -130,6 +130,7 @@ export default function AppBarLayout({ children }) {
                 </Stack>
             </Toolbar>
         </AppBar>
+        <Toolbar variant="dense" />
         <Outlet />
         </>
     );

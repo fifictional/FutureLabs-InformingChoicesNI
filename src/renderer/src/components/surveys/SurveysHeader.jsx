@@ -17,6 +17,7 @@ import EditSurveyDialog from "./EditSurveyDialog";
 import { GoogleFormPicker } from "../google-forms/GoogleFormPicker";
 import CreateSurveyDialog from "./CreateSurveyDialog";
 import ExcelImportDialog from "./ExcelImportDialog";
+import { Link } from "react-router";
 
 export default function SurveysHeader(props) {
   const {
@@ -91,12 +92,22 @@ export default function SurveysHeader(props) {
         open={actionsMenuOpened}
         onClose={onCloseActionsMenu}
       >
-        <MenuItem disabled={!selectedSurvey} value="view-data">
+        <MenuItem disabled={!selectedSurvey} value="view-data" component={Link} to={"/surveys/data/" + selectedSurveyObject?.id}>
           View Data
         </MenuItem>
         <MenuItem
           disabled={!selectedSurvey || selectedSurveyObject?.provider !== "google_forms"}
           value="view-on-browser"
+          onClick={() => {
+            if (selectedSurveyObject?.baseLink) {
+              window.api.openExternal(selectedSurveyObject.baseLink);
+            } else if (selectedSurveyObject?.externalId) {
+              const googleFormsBaseUrl = "https://docs.google.com/forms/d/";
+              window.api.openExternal(googleFormsBaseUrl + selectedSurveyObject.externalId);
+            } else {
+              alert("No link available for this survey.");
+            }
+          }}
         >
           View on Browser
         </MenuItem>

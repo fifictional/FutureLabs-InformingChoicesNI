@@ -24,6 +24,7 @@ const api = {
   },
   forms: {
     list: () => ipcRenderer.invoke('forms:list'),
+    findById: (id) => ipcRenderer.invoke('forms:findById', id),
     listWithEventNameAndResponseCount: () =>
       ipcRenderer.invoke('forms:listWithEventNameAndResponseCount'),
     listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),

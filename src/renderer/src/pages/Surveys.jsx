@@ -4,6 +4,7 @@ import SurveysHeader from "../components/surveys/SurveysHeader";
 import SurveysToolbar from "../components/surveys/SurveysToolbar";
 import SurveysGrid from "../components/surveys/SurveysGrid";
 import { buildSurveyRows } from "../common/SurveyUtils";
+import ContainerWithBackground from "../components/common/ContainerWithBackground";
 
 export default function Surveys() {
   const theme = useTheme();
@@ -167,20 +168,8 @@ export default function Surveys() {
     !importBusy &&
     excelBuffer;
 
-  const backgroundStyle = css`
-    background-color: #f5f5f5;
-    width: 100%;
-    height: 100%;
-  `;
-
-  const containerStyle = css`
-    margin: 0 auto;
-    padding: 2rem;
-  `;
-
   return (
-    <Box css={backgroundStyle}>
-      <Box css={containerStyle}>
+    <ContainerWithBackground>
         <SurveysHeader
           theme={theme}
           selectedSurvey={selectedSurvey}
@@ -242,7 +231,6 @@ export default function Surveys() {
         />
 
         <SurveysGrid rows={rows} onSelect={setSelectedSurvey} />
-      </Box>
-    </Box>
+    </ContainerWithBackground>
   );
 }
