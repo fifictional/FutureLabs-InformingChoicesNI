@@ -11,6 +11,10 @@ export async function listForms() {
   return getDb().select().from(forms);
 }
 
+export async function findFormById(id) {
+  return getDb().select().from(forms).where(eq(forms.id, id)).get();
+}
+
 export async function listFormWithEventNameAndResponseCount() {
   const db = getDb();
   const result = await db

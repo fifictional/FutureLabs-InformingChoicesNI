@@ -6,6 +6,7 @@ import ViewDescriptionDialog from "../components/events/ViewDescriptionDialog.js
 import DeleteEventDialog from "../components/events/DeleteEventDialog.jsx";
 import EditTagsDialog from "../components/events/EditTagsDialog.jsx";
 import EditEventDialog from "../components/events/EditEventDialog.jsx";
+import ContainerWithBackground from "../components/common/ContainerWithBackground.jsx";
 
 export default function Events() {
     const theme = useTheme();
@@ -36,16 +37,6 @@ export default function Events() {
     // filter
     const [filterValue, setFilterValue] = useState('');
 
-    const backgroundStyle = css`
-    background-color: #f5f5f5;
-    width: 100%;
-    height: 100%;
-    `;    
-
-    const containerStyle = css`
-    margin: 0 auto;
-    padding: 2rem;
-    `;
 
     const toolbarStyle = css`
         padding: 0.5em 0;
@@ -135,75 +126,73 @@ export default function Events() {
 
     return (
         <>
-        <Box css={backgroundStyle}>
-            <Box css={containerStyle}>
-                <Stack direction="row" spacing={2} alignItems="center" mb={1}>
-                    <Typography flex={1} variant="h5" fontWeight="bold" mb={3} color="#000000">
-                    Events
-                    </Typography>
-                    
-                    <Button 
-                        onClick={handleActionsClick}
-                        variant="contained" 
-                        color={theme.palette.primary.accent} 
-                        endIcon={<ArrowDropDown />}>
-                        Event Actions
-                    </Button>
-                    <Menu label="Actions" anchorEl={actionsMenuAnchorEl} open={actionsMenuOpened} onClose={() => setActionsMenuOpened(false)}>
-                        <MenuItem disabled={!selectedEvent} onClick={() => setEditEventDialogOpen(true)} value="edit-event">Edit Event</MenuItem>
-                        <MenuItem disabled={!selectedEvent} onClick={() => setEditTagsDialogOpen(true)} value="edit-tags">Edit Tags</MenuItem>
-                        <MenuItem disabled={!selectedEvent} onClick={() => setDeleteEventDialogOpen(true)} value="delete">Delete</MenuItem>
-                    </Menu>
-                    <DeleteEventDialog onDelete={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={deleteEventDialogOpen} handleClose={() => setDeleteEventDialogOpen(false)} />
-                    <EditTagsDialog onEdit={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editTagsDialogOpen} handleClose={() => setEditTagsDialogOpen(false)} />
-                    <EditEventDialog onEdit={() => setRefresh(prev => !prev)} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editEventDialogOpen} handleClose={() => setEditEventDialogOpen(false)} />
-                    <Button variant="contained" color="accent" endIcon={<Add />} onClick={() => setCreateEventDialogOpen(true)}>
-                        Create New Event
-                    </Button>
-                    <Dialog fullWidth maxWidth="sm" open={createEventDialogOpen} onClose={() => setCreateEventDialogOpen(false)}>
-                        <DialogTitle>Create New Event</DialogTitle>
-                        <DialogContent>
-                            <Typography mb={2}>Create a new event to group related surveys and feedback together. You can tag events to associate them to one another and later filter the events and surveys by the tags.</Typography>
-                            <Stack spacing={2}>
-                                <TextField onChange={(e) => setNewEventName(e.target.value)} label="Event Name" fullWidth />
-                                <TextField onChange={(e) => setNewEventDescription(e.target.value)} label="Description (Optional)" fullWidth multiline rows={4} />
-                                {newEventCreationError && <Typography color="error">{newEventCreationError}</Typography>}
-                            </Stack>
-                        </DialogContent>
-                        <DialogActions>
-                            <Button disabled={newEventCreationLoading} onClick={() => setCreateEventDialogOpen(false)}>Cancel</Button>
-                            <Button disabled={!newEventName || newEventCreationLoading} variant="contained" color="primary" onClick={() => handleEventCreation()}>Create</Button>
-                        </DialogActions>
-                    </Dialog>
-                </Stack>
-                <Divider />
-                <Stack css={toolbarStyle} direction="row" alignItems="center">
-                    <TextField 
-                        aria-label="filter events" 
-                        placeholder="Search..." 
-                        size="small" 
-                        variant="outlined" 
-                        css={filterboxStyle}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                    />
-                    <Button 
-                        color="primary" 
-                        onClick={() => setRefresh(prev => !prev)} 
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                    >
-                        Refresh
-                    </Button>   
-                </Stack>
-
-                <DataGrid 
-                    autoHeight 
-                    columns={dataGridColumns} 
-                    rows={dataGridRows}
-                    onRowSelectionModelChange={(newSelection) => setSelectedEvent(newSelection.ids?.values().next().value || null)}
+        <ContainerWithBackground>
+            <Stack direction="row" spacing={2} alignItems="center" mb={1}>
+                <Typography flex={1} variant="h5" fontWeight="bold" mb={3} color="#000000">
+                Events
+                </Typography>
+                
+                <Button 
+                    onClick={handleActionsClick}
+                    variant="contained" 
+                    color={theme.palette.primary.accent} 
+                    endIcon={<ArrowDropDown />}>
+                    Event Actions
+                </Button>
+                <Menu label="Actions" anchorEl={actionsMenuAnchorEl} open={actionsMenuOpened} onClose={() => setActionsMenuOpened(false)}>
+                    <MenuItem disabled={!selectedEvent} onClick={() => setEditEventDialogOpen(true)} value="edit-event">Edit Event</MenuItem>
+                    <MenuItem disabled={!selectedEvent} onClick={() => setEditTagsDialogOpen(true)} value="edit-tags">Edit Tags</MenuItem>
+                    <MenuItem disabled={!selectedEvent} onClick={() => setDeleteEventDialogOpen(true)} value="delete">Delete</MenuItem>
+                </Menu>
+                <DeleteEventDialog onDelete={() => { setRefresh(prev => !prev); setActionsMenuOpened(false); } } event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={deleteEventDialogOpen} handleClose={() => setDeleteEventDialogOpen(false)} />
+                <EditTagsDialog onEdit={() => {setRefresh(prev => !prev); setActionsMenuOpened(false);}} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editTagsDialogOpen} handleClose={() => setEditTagsDialogOpen(false)} />
+                <EditEventDialog onEdit={() => {setRefresh(prev => !prev); setActionsMenuOpened(false);}} event={dataGridRows.find(row => row.id === selectedEvent)?.event} open={editEventDialogOpen} handleClose={() => setEditEventDialogOpen(false)} />
+                <Button variant="contained" color="accent" endIcon={<Add />} onClick={() => setCreateEventDialogOpen(true)}>
+                    Create New Event
+                </Button>
+                <Dialog fullWidth maxWidth="sm" open={createEventDialogOpen} onClose={() => setCreateEventDialogOpen(false)}>
+                    <DialogTitle>Create New Event</DialogTitle>
+                    <DialogContent>
+                        <Typography mb={2}>Create a new event to group related surveys and feedback together. You can tag events to associate them to one another and later filter the events and surveys by the tags.</Typography>
+                        <Stack spacing={2}>
+                            <TextField onChange={(e) => setNewEventName(e.target.value)} label="Event Name" fullWidth />
+                            <TextField onChange={(e) => setNewEventDescription(e.target.value)} label="Description (Optional)" fullWidth multiline rows={4} />
+                            {newEventCreationError && <Typography color="error">{newEventCreationError}</Typography>}
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button disabled={newEventCreationLoading} onClick={() => setCreateEventDialogOpen(false)}>Cancel</Button>
+                        <Button disabled={!newEventName || newEventCreationLoading} variant="contained" color="primary" onClick={() => handleEventCreation()}>Create</Button>
+                    </DialogActions>
+                </Dialog>
+            </Stack>
+            <Divider />
+            <Stack css={toolbarStyle} direction="row" alignItems="center">
+                <TextField 
+                    aria-label="filter events" 
+                    placeholder="Search..." 
+                    size="small" 
+                    variant="outlined" 
+                    css={filterboxStyle}
+                    onChange={(e) => setFilterValue(e.target.value)}
                 />
-            </Box>
-        </Box>
+                <Button 
+                    color="primary" 
+                    onClick={() => setRefresh(prev => !prev)} 
+                    variant="outlined"
+                    startIcon={<Refresh />}
+                >
+                    Refresh
+                </Button>   
+            </Stack>
+
+            <DataGrid 
+                autoHeight 
+                columns={dataGridColumns} 
+                rows={dataGridRows}
+                onRowSelectionModelChange={(newSelection) => setSelectedEvent(newSelection.ids?.values().next().value || null)}
+            />
+        </ContainerWithBackground>
         </>
     )
 }

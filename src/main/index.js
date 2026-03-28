@@ -137,6 +137,7 @@ ipcMain.handle('eventTags:removeFromEvent', (_event, eventId, tagId) =>
 );
 
 ipcMain.handle('forms:list', () => formService.listForms());
+ipcMain.handle('forms:findById', (_event, id) => formService.findFormById(id));
 ipcMain.handle('forms:listWithEventNameAndResponseCount', () =>
   formService.listFormWithEventNameAndResponseCount()
 );
