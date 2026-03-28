@@ -16,6 +16,7 @@ import { Card, CardContent, Typography, Box, Container, css } from '@mui/materia
 import { Star, StarHalf, StarBorder } from '@mui/icons-material';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
+import { useEffect, useState } from 'react';
 
 export default function Dashboard() {
   const responses = [
@@ -76,7 +77,23 @@ export default function Dashboard() {
   { name: 'Armagh', lat: 54.3503, lng: -6.6528, count: responses.filter(r => r.area === 'Armagh').length }
 ]
 
-  const totalUsers = responses.length;
+  const [totalSubmissions, setTotalSubmissions] = useState(0);
+
+  useEffect(() => {
+    async function fetchStatistics() {
+      try {
+        const count = await window.api.submissions.countAll();
+        console.log('Total submissions:', count);
+        setTotalSubmissions(count);
+      } catch (error) {
+        console.error('Error fetching total users:', error);
+      }
+    } 
+
+    fetchStatistics();
+    }, []);
+
+
   const total = responses.reduce((sum, r) => sum + r.satisfaction, 0);
   const avgSatisfaction = (total / responses.length).toFixed(1);
   const improvedCount = responses.filter((r) => r.improved === true).length;
@@ -166,7 +183,7 @@ export default function Dashboard() {
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
           <SmallStatisticCard title="Total Feedback Received">
             <Typography variant="h4" fontWeight="bold">
-              {totalUsers}
+              {totalSubmissions}
             </Typography>
           </SmallStatisticCard>
           <SmallStatisticCard title="Avg Satisfaction">

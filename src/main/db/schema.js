@@ -1,3 +1,4 @@
+import { name } from '@electron-toolkit/eslint-config-prettier';
 import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Define the SQL database schema using Drizzle ORM's SQLite adapter
@@ -81,3 +82,10 @@ export const responses = sqliteTable(
     )
   ]
 );
+
+export const statisticOverviews = sqliteTable('statistic_overviews', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  defaultQuestion: text('default_question').notNull(),
+  questionId: integer('question_id').references(() => questions.id, { onDelete: 'set null' })
+});

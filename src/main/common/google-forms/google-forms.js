@@ -77,10 +77,18 @@ export async function getGoogleFormResponseById(formId, responseId) {
   return response.data;
 }
 
-export async function openGoogleFormInBrowser(formId) {
+export async function openGoogleFormInBrowserById(formId) {
   if (formId) {
     const newLink = `https://docs.google.com/forms/d/${formId}/edit`;
     shell.openExternal(newLink);
+  } else {
+    throw new Error('Form not found or does not have a responder URI');
+  }
+}
+
+export async function openGoogleFormInBrowserByBaseLink(baseLink) {
+  if (baseLink) {
+    shell.openExternal(baseLink);
   } else {
     throw new Error('Form not found or does not have a responder URI');
   }

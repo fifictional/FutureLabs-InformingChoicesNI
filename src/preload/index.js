@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import { findEventByName } from '../main/db/services/eventService';
+import { count } from 'drizzle-orm';
 
 // APIs for renderer
 const api = {
@@ -38,6 +39,7 @@ const api = {
     delete: (id) => ipcRenderer.invoke('questions:delete', id)
   },
   submissions: {
+    countAll: () => ipcRenderer.invoke('submissions:countAll'),
     listByForm: (formId) => ipcRenderer.invoke('submissions:listByForm', formId),
     create: (data) => ipcRenderer.invoke('submissions:create', data),
     delete: (id) => ipcRenderer.invoke('submissions:delete', id)
@@ -52,7 +54,9 @@ const api = {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
     create: (title, document_title) =>
       ipcRenderer.invoke('googleForms:create', title, document_title),
-    openInBrowser: (formId) => ipcRenderer.invoke('googleForms:openInBrowser', formId),
+    openInBrowserById: (formId) => ipcRenderer.invoke('googleForms:openInBrowserById', formId),
+    openInBrowserByBaseLink: (baseLink) =>
+      ipcRenderer.invoke('googleForms:openInBrowserByBaseLink', baseLink),
     importSelected: (payload) => ipcRenderer.invoke('googleForms:importSelected', payload)
   },
   surveys: {
