@@ -189,7 +189,7 @@ export default function SurveysHeader(props) {
         return;
       }
       closeGoogleImportDialog();
-      triggerRefresh();
+      onRefresh();
     } catch (e) {
       setGoogleImportErr(e?.message || String(e));
     } finally {
