@@ -51,7 +51,8 @@ const api = {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
     create: (title, document_title) =>
       ipcRenderer.invoke('googleForms:create', title, document_title),
-    openInBrowser: (formId) => ipcRenderer.invoke('googleForms:openInBrowser', formId)
+    openInBrowser: (formId) => ipcRenderer.invoke('googleForms:openInBrowser', formId),
+    importSelected: (payload) => ipcRenderer.invoke('googleForms:importSelected', payload)
   },
   surveys: {
     parseExcelImport: (buffer) => ipcRenderer.invoke('surveys:parseExcelImport', buffer),
