@@ -31,7 +31,8 @@ const api = {
     listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),
     create: (data) => ipcRenderer.invoke('forms:create', data),
     delete: (id) => ipcRenderer.invoke('forms:delete', id),
-    update: (id, data) => ipcRenderer.invoke('forms:update', id, data)
+    update: (id, data) => ipcRenderer.invoke('forms:update', id, data),
+    refreshSchemaAndResponses: (id) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', id)
   },
   questions: {
     listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),

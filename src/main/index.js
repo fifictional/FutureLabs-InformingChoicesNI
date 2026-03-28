@@ -150,6 +150,9 @@ ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsBy
 ipcMain.handle('forms:create', (_event, data) => formService.createForm(data));
 ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id));
 ipcMain.handle('forms:update', (_event, id, data) => formService.updateForm(id, data));
+ipcMain.handle('forms:refreshSchemaAndResponses', (_event, id) =>
+  formService.refreshSchemaAndResponses(id)
+);
 
 ipcMain.handle('questions:listByForm', (_event, formId) =>
   questionService.listQuestionsByForm(formId)
