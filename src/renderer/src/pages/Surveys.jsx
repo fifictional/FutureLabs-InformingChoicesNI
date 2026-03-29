@@ -55,7 +55,7 @@ export default function Surveys() {
           onRefresh={triggerRefresh}
         />
 
-        <SurveysGrid rows={rows} onSelect={setSelectedSurvey} />
+        <SurveysGrid loading={loading} rows={rows} onSelect={setSelectedSurvey} />
     </ContainerWithBackground>
   );
 }

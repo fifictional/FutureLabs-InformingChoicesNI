@@ -23,10 +23,17 @@ const columns = [
   },
 ];
 
-export default function SurveysGrid({ rows, onSelect }) {
+export default function SurveysGrid({ rows, onSelect, loading }) {
   return (
     <DataGrid
       columns={columns}
+      loading={loading}
+      slotProps={{
+        loadingOverlay: {
+          variant: 'linear-progress',
+          noRowsVariant: 'skeleton',
+        },
+      }}
       rows={rows}
       onRowSelectionModelChange={(newSelection) =>
         onSelect(newSelection.ids?.values()?.next()?.value || null)
