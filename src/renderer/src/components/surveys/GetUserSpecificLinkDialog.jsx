@@ -16,16 +16,45 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 function toBaseFormLink(survey) {
-    if (survey?.baseLink) return survey.baseLink;
-    if (survey?.externalId) return `https://docs.google.com/forms/d/${survey.externalId}/viewform`;
-    return "";
+    const externalId = String(survey?.externalId || "").trim();
+    if (externalId) {
+        return `https://docs.google.com/forms/d/${externalId}/viewform`;
+    }
+
+    const rawBaseLink = String(survey?.baseLink || "").trim();
+    if (!rawBaseLink) return "";
+
+    try {
+        const url = new URL(rawBaseLink);
+        url.pathname = url.pathname.replace(/\/edit$/, "/viewform");
+        return url.toString();
+    } catch {
+        return rawBaseLink.replace(/\/edit$/, "/viewform");
+    }
 }
 
 function buildPrefilledLink(baseLink, questionEntryId, value) {
     const url = new URL(baseLink);
+    const normalizedEntryId = String(questionEntryId || "").replace(/^entry\./i, "").trim();
     url.searchParams.set("usp", "pp_url");
-    url.searchParams.set(`entry.${questionEntryId}`, value);
+    url.searchParams.set(`entry.${normalizedEntryId}`, value);
     return url.toString();
+}
+
+function questionIdHexToEntryDecimal(questionId) {
+    const raw = String(questionId || "").trim().toLowerCase();
+    if (!raw) return "";
+
+    // Google questionId can be hex (e.g. 422ddb5a) while prefill requires decimal.
+    const isHex = /^[0-9a-f]+$/.test(raw);
+    const hasHexLetters = /[a-f]/.test(raw);
+    if (!isHex || !hasHexLetters) return "";
+
+    try {
+        return BigInt(`0x${raw}`).toString(10);
+    } catch {
+        return "";
+    }
 }
 
 export default function GetUserSpecificLinkDialog({ open, onClose, survey }) {
@@ -48,10 +77,14 @@ export default function GetUserSpecificLinkDialog({ open, onClose, survey }) {
     const schemaQuestions = useMemo(() => {
         const questions = Array.isArray(survey?.schema?.questions) ? survey.schema.questions : [];
         return questions
-            .map((q, index) => ({
-                entryId: String(q?.questionId || "").trim(),
-                title: String(q?.title || `Question ${index + 1}`).trim()
-            }))
+            .map((q, index) => {
+                const rawQuestionId = String(q?.questionId || "").trim();
+                const fromQuestionId = questionIdHexToEntryDecimal(rawQuestionId);
+                return {
+                    entryId: String(fromQuestionId || rawQuestionId || q?.itemId || "").trim(),
+                    title: String(q?.title || `Question ${index + 1}`).trim()
+                };
+            })
             .filter((q) => q.entryId);
     }, [survey]);
 
@@ -91,7 +124,6 @@ export default function GetUserSpecificLinkDialog({ open, onClose, survey }) {
             setLoadingQuestions(true);
             try {
                 const rows = await window.api.questions.listByForm(survey.id);
-                console.log("Fetched DB questions for form", survey.id, rows);
                 setDbQuestions(Array.isArray(rows) ? rows : []);
             } catch {
                 setDbQuestions([]);

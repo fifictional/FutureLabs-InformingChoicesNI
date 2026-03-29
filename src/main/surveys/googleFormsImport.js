@@ -23,6 +23,7 @@ function extractGoogleQuestionDefinitions(form) {
     if (!q) continue;
     const title = pickText(it?.title || q?.questionId || 'Question');
     const def = {
+      itemId: it?.itemId ? pickText(it.itemId) : null,
       questionId: q.questionId ? pickText(q.questionId) : null,
       title,
       type: 'unknown',

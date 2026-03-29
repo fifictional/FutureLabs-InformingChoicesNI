@@ -134,6 +134,7 @@ export default function ViewSurveyData() {
             const linkedEvent = allEvents.find((event) => event.id === form.eventId);
 
             setSurveyData(form);
+            console.log(form);
             setEventName(linkedEvent?.name || "Unknown event");
             setQuestions(formQuestions);
             setSubmissions(formSubmissions);

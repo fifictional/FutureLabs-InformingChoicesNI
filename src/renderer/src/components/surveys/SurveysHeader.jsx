@@ -24,6 +24,8 @@ import CreateSurveyDialog from "./CreateSurveyDialog";
 import ExcelImportDialog from "./ExcelImportDialog";
 import { Link } from "react-router";
 import GetUserSpecificLinkDialog from "./GetUserSpecificLinkDialog";
+import EventSelectorAutocomplete from "../events/EventSelectorAutocomplete.jsx";
+import CreateEventDialog from "../events/CreateEventDialog.jsx";
 
 export default function SurveysHeader(props) {
   const { selectedSurveyObject, onRefresh } = props;
@@ -52,7 +54,9 @@ export default function SurveysHeader(props) {
   const [googleImportDialogOpen, setGoogleImportDialogOpen] = useState(false);
   const [googleImportPendingIds, setGoogleImportPendingIds] = useState(null);
   const [googleImportEventName, setGoogleImportEventName] = useState("");
-  const [googleImportEventDesc, setGoogleImportEventDesc] = useState("");
+  const [googleImportCreateEventOpen, setGoogleImportCreateEventOpen] = useState(false);
+  const [googleImportPendingNewEventName, setGoogleImportPendingNewEventName] = useState("");
+  const [googleImportEventSelectorReloadToken, setGoogleImportEventSelectorReloadToken] = useState(0);
   const [googleImportFormName, setGoogleImportFormName] = useState("");
   const [googleImportBusy, setGoogleImportBusy] = useState(false);
   const [googleImportErr, setGoogleImportErr] = useState("");
@@ -151,7 +155,6 @@ export default function SurveysHeader(props) {
     if (!selectedFormIds?.length) return;
     setGoogleImportPendingIds(selectedFormIds);
     setGoogleImportEventName("");
-    setGoogleImportEventDesc("");
     setGoogleImportFormName("");
     setGoogleImportErr("");
     setGoogleFormPickerOpen(false);
@@ -177,7 +180,6 @@ export default function SurveysHeader(props) {
       const res = await window.api.googleForms.importSelected({
         formIds: googleImportPendingIds,
         eventName: googleImportEventName.trim(),
-        eventDescription: googleImportEventDesc.trim() || undefined,
         formNameOverride: googleImportFormName.trim() || undefined,
       });
       if (!res?.ok) {
@@ -361,7 +363,7 @@ export default function SurveysHeader(props) {
         <DialogTitle>Import Google Forms</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Choose an event for the imported forms. A new event is created if the name does not exist yet.
+            Choose an event for the imported forms.
           </Typography>
           <TextField
             margin="dense"
@@ -371,22 +373,17 @@ export default function SurveysHeader(props) {
             onChange={(e) => setGoogleImportFormName(e.target.value)}
             disabled={googleImportBusy}
           />
-          <TextField
-            margin="dense"
-            label="Event name"
-            fullWidth
-            required
+          <EventSelectorAutocomplete
             value={googleImportEventName}
-            onChange={(e) => setGoogleImportEventName(e.target.value)}
+            onChange={setGoogleImportEventName}
+            required
             disabled={googleImportBusy}
-          />
-          <TextField
-            margin="dense"
-            label="Event description (optional)"
-            fullWidth
-            value={googleImportEventDesc}
-            onChange={(e) => setGoogleImportEventDesc(e.target.value)}
-            disabled={googleImportBusy}
+            reloadToken={`${googleImportDialogOpen}-${googleImportEventSelectorReloadToken}`}
+            label="Event"
+            onAddRequested={(typedName) => {
+              setGoogleImportPendingNewEventName(typedName || "");
+              setGoogleImportCreateEventOpen(true);
+            }}
           />
           {googleImportErr ? (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
@@ -407,6 +404,22 @@ export default function SurveysHeader(props) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CreateEventDialog
+        open={googleImportCreateEventOpen}
+        onClose={() => setGoogleImportCreateEventOpen(false)}
+        initialName={googleImportPendingNewEventName}
+        title="Create Event"
+        helperText="Create a new event and it will be selected for this Google Forms import."
+        onCreated={(event) => {
+          if (event?.name) {
+            setGoogleImportEventName(event.name);
+          } else if (googleImportPendingNewEventName) {
+            setGoogleImportEventName(googleImportPendingNewEventName);
+          }
+          setGoogleImportEventSelectorReloadToken((prev) => prev + 1);
+        }}
+      />
     </Stack>
   );
 }
