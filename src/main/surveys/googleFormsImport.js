@@ -3,7 +3,10 @@ import * as formService from '../db/services/formService.js';
 import * as questionService from '../db/services/questionService.js';
 import * as submissionService from '../db/services/submissionService.js';
 import * as responseService from '../db/services/responseService.js';
-import { getGoogleFormById, getGoogleFormResponsesById } from '../common/google-forms/google-forms.js';
+import {
+  getGoogleFormById,
+  getGoogleFormResponsesById
+} from '../common/google-forms/google-forms.js';
 
 function pickText(v) {
   if (v == null) return '';
@@ -85,14 +88,39 @@ function parseSubmittedAt(resp) {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
-function valueToDb(text) {
-  const s = pickText(text).trim();
-  if (!s) return { valueText: '', valueNumber: null, valueChoice: null };
-  const num = Number(s);
-  if (!Number.isNaN(num) && Number.isFinite(num) && s === String(num)) {
-    return { valueText: s, valueNumber: num, valueChoice: null };
+function mapGoogleQuestionTypeToAnswerType(questionDef) {
+  if (['radio', 'dropdown', 'checkbox'].includes(questionDef?.type)) return 'choice';
+  if (questionDef?.type === 'scale') return 'number';
+  return 'text';
+}
+
+function answerToDbValues(answer, answerType) {
+  if (!answer) return { valueText: '', valueNumber: null, valueChoice: null };
+
+  if (answerType === 'choice' && answer.choiceAnswers?.values?.length) {
+    const joined = answer.choiceAnswers.values
+      .map((v) => pickText(v).trim())
+      .filter(Boolean)
+      .join(' | ');
+    if (!joined) return { valueText: '', valueNumber: null, valueChoice: null };
+    return { valueText: joined, valueNumber: null, valueChoice: joined };
   }
-  return { valueText: s, valueNumber: null, valueChoice: null };
+
+  const text = pickText(extractAnswerValue(answer)).trim();
+  if (!text) return { valueText: '', valueNumber: null, valueChoice: null };
+
+  if (answerType === 'choice') {
+    return { valueText: text, valueNumber: null, valueChoice: text };
+  }
+
+  if (answerType === 'number') {
+    const num = Number(text);
+    if (!Number.isNaN(num) && Number.isFinite(num) && text === String(num)) {
+      return { valueText: text, valueNumber: num, valueChoice: null };
+    }
+  }
+
+  return { valueText: text, valueNumber: null, valueChoice: null };
 }
 
 async function ensureEventByName(name, description) {
@@ -117,7 +145,10 @@ async function uniqueFormName(base) {
   return name;
 }
 
-export async function importGoogleForms(formIds, { eventName, eventDescription, formNameOverride } = {}) {
+export async function importGoogleForms(
+  formIds,
+  { eventName, eventDescription, formNameOverride } = {}
+) {
   if (!Array.isArray(formIds) || formIds.length === 0) throw new Error('No forms selected');
   const ev = await ensureEventByName(eventName, eventDescription);
 
@@ -159,7 +190,23 @@ export async function importGoogleForms(formIds, { eventName, eventDescription, 
 
     const questionRows = [];
     for (let i = 0; i < questionDefs.length; i++) {
-      questionRows.push((await questionService.createQuestion(dbForm.id))[0]);
+      const def = questionDefs[i];
+      const answerType = mapGoogleQuestionTypeToAnswerType(def);
+      const [questionRow] = await questionService.createQuestion({
+        formId: dbForm.id,
+        text: def.title,
+        answerType
+      });
+
+      if (answerType === 'choice' && Array.isArray(def.options) && def.options.length > 0) {
+        await questionService.createQuestionChoices(questionRow.id, def.options);
+      }
+
+      questionRows.push({
+        ...questionRow,
+        googleQuestionId: def.questionId,
+        answerType
+      });
     }
 
     // import responses (best-effort)
@@ -179,17 +226,24 @@ export async function importGoogleForms(formIds, { eventName, eventDescription, 
         externalId
       });
 
-      // Google Forms answers are keyed by questionId; we don't persist questionId,
-      // so we just map in order we created questions and store whatever we can.
       const answersObj = r?.answers || {};
-      const answerValues = Object.values(answersObj).map(extractAnswerValue);
+      const answerEntries = Object.entries(answersObj);
+      const answerValuesByIndex = answerEntries.map(([, value]) => value);
 
       for (let i = 0; i < questionRows.length; i++) {
-        const text = answerValues[i] ?? '';
-        const vals = valueToDb(text);
+        const question = questionRows[i];
+        let answer = null;
+
+        if (question.googleQuestionId && answersObj[question.googleQuestionId]) {
+          answer = answersObj[question.googleQuestionId];
+        } else {
+          answer = answerValuesByIndex[i] ?? null;
+        }
+
+        const vals = answerToDbValues(answer, question.answerType);
         await responseService.upsertResponse({
           submissionId: sub.id,
-          questionId: questionRows[i].id,
+          questionId: question.id,
           ...vals
         });
       }
@@ -200,4 +254,3 @@ export async function importGoogleForms(formIds, { eventName, eventDescription, 
 
   return { formIds: createdFormIds };
 }
-

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "572fa4e3-ea1b-472e-a737-6983ce03d641",
+  "id": "e3259e31-b9f6-4396-a377-2b37f92fc1fa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "event_tag_mappings": {
@@ -32,7 +32,10 @@
       "indexes": {
         "unique_event_tag_mapping": {
           "name": "unique_event_tag_mapping",
-          "columns": ["event_id", "tag_id"],
+          "columns": [
+            "event_id",
+            "tag_id"
+          ],
           "isUnique": true
         }
       },
@@ -41,8 +44,12 @@
           "name": "event_tag_mappings_event_id_events_id_fk",
           "tableFrom": "event_tag_mappings",
           "tableTo": "events",
-          "columnsFrom": ["event_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -50,8 +57,12 @@
           "name": "event_tag_mappings_tag_id_event_tags_id_fk",
           "tableFrom": "event_tag_mappings",
           "tableTo": "event_tags",
-          "columnsFrom": ["tag_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tag_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -88,12 +99,16 @@
       "indexes": {
         "event_tags_name_unique": {
           "name": "event_tags_name_unique",
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "isUnique": true
         },
         "event_tags_slug_unique": {
           "name": "event_tags_slug_unique",
-          "columns": ["slug"],
+          "columns": [
+            "slug"
+          ],
           "isUnique": true
         }
       },
@@ -130,7 +145,9 @@
       "indexes": {
         "events_name_unique": {
           "name": "events_name_unique",
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "isUnique": true
         }
       },
@@ -167,14 +184,14 @@
           "name": "base_link",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "external_id": {
           "name": "external_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "event_id": {
@@ -195,7 +212,9 @@
       "indexes": {
         "forms_name_unique": {
           "name": "forms_name_unique",
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "isUnique": true
         }
       },
@@ -204,12 +223,47 @@
           "name": "forms_event_id_events_id_fk",
           "tableFrom": "forms",
           "tableTo": "events",
-          "columnsFrom": ["event_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "question_choice": {
+      "name": "question_choice",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "choice_text": {
+          "name": "choice_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -223,6 +277,20 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "answer_type": {
+          "name": "answer_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         },
         "form_id": {
           "name": "form_id",
@@ -238,8 +306,12 @@
           "name": "questions_form_id_forms_id_fk",
           "tableFrom": "questions",
           "tableTo": "forms",
-          "columnsFrom": ["form_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "form_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -297,7 +369,10 @@
       "indexes": {
         "unique_response_per_question_and_submission": {
           "name": "unique_response_per_question_and_submission",
-          "columns": ["submission_id", "question_id"],
+          "columns": [
+            "submission_id",
+            "question_id"
+          ],
           "isUnique": true
         }
       },
@@ -306,8 +381,12 @@
           "name": "responses_submission_id_submissions_id_fk",
           "tableFrom": "responses",
           "tableTo": "submissions",
-          "columnsFrom": ["submission_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "submission_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -315,9 +394,73 @@
           "name": "responses_question_id_questions_id_fk",
           "tableFrom": "responses",
           "tableTo": "questions",
-          "columnsFrom": ["question_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "statistic_overviews": {
+      "name": "statistic_overviews",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "default_question": {
+          "name": "default_question",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "statistic_overviews_name_unique": {
+          "name": "statistic_overviews_name_unique",
+          "columns": [
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "statistic_overviews_question_id_questions_id_fk": {
+          "name": "statistic_overviews_question_id_questions_id_fk",
+          "tableFrom": "statistic_overviews",
+          "tableTo": "questions",
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -360,7 +503,10 @@
       "indexes": {
         "unique_submission_per_form": {
           "name": "unique_submission_per_form",
-          "columns": ["form_id", "external_id"],
+          "columns": [
+            "form_id",
+            "external_id"
+          ],
           "isUnique": true
         }
       },
@@ -369,8 +515,12 @@
           "name": "submissions_form_id_forms_id_fk",
           "tableFrom": "submissions",
           "tableTo": "forms",
-          "columnsFrom": ["form_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "form_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

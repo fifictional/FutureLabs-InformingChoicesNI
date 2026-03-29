@@ -43,6 +43,8 @@ export const forms = sqliteTable('forms', {
 
 export const questions = sqliteTable('questions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  text: text('text').notNull(),
+  answerType: text('answer_type', { enum: ['text', 'number', 'choice'] }).notNull(),
   formId: integer('form_id')
     .notNull()
     .references(() => forms.id, { onDelete: 'cascade' })
@@ -88,4 +90,10 @@ export const statisticOverviews = sqliteTable('statistic_overviews', {
   name: text('name').notNull().unique(),
   defaultQuestion: text('default_question').notNull(),
   questionId: integer('question_id').references(() => questions.id, { onDelete: 'set null' })
+});
+
+export const questionChoice = sqliteTable('question_choice', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  questionId: integer('question_id'),
+  choiceText: text('choice_text').notNull()
 });

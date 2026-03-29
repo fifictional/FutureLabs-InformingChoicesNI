@@ -26,16 +26,24 @@ CREATE TABLE `forms` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`provider` text NOT NULL,
-	`base_link` text NOT NULL,
-	`external_id` text NOT NULL,
+	`base_link` text,
+	`external_id` text,
 	`event_id` integer NOT NULL,
 	`schema` text,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `forms_name_unique` ON `forms` (`name`);--> statement-breakpoint
+CREATE TABLE `question_choice` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`question_id` integer,
+	`choice_text` text NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `questions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`text` text NOT NULL,
+	`answer_type` text NOT NULL,
 	`form_id` integer NOT NULL,
 	FOREIGN KEY (`form_id`) REFERENCES `forms`(`id`) ON UPDATE no action ON DELETE cascade
 );
@@ -52,6 +60,15 @@ CREATE TABLE `responses` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `unique_response_per_question_and_submission` ON `responses` (`submission_id`,`question_id`);--> statement-breakpoint
+CREATE TABLE `statistic_overviews` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text NOT NULL,
+	`default_question` text NOT NULL,
+	`question_id` integer,
+	FOREIGN KEY (`question_id`) REFERENCES `questions`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `statistic_overviews_name_unique` ON `statistic_overviews` (`name`);--> statement-breakpoint
 CREATE TABLE `submissions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`form_id` integer NOT NULL,
