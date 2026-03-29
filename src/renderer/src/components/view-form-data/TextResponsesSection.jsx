@@ -49,8 +49,10 @@ export default function TextResponsesSection({ question, searchValue, onSearchCh
                 variant="outlined"
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
-                InputProps={{
-                    startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />
+                slotProps={{
+                    input: {
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />
+                    }
                 }}
                 css={searchInputCss}
             />

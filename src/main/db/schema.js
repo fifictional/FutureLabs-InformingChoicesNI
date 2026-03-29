@@ -97,3 +97,10 @@ export const questionChoice = sqliteTable('question_choice', {
   questionId: integer('question_id'),
   choiceText: text('choice_text').notNull()
 });
+
+export const clients = sqliteTable('clients', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  nonConfidentialIdentifier: text('non_confidential_identifier'),
+  dateOfBirth: integer('date_of_birth', { mode: 'timestamp' }),
+  referenceId: text('reference_id').notNull().unique()
+});

@@ -115,7 +115,7 @@ export default function AppBarLayout({ children }) {
                     <Button component={Link} to="/">Home</Button>
                     <Button component={Link} to="surveys">Surveys</Button>
                     <Button component={Link} to="events">Events</Button>
-                    <Button component={Link} to="analyse">Analyse</Button>
+                    <Button component={Link} to="analysis">Analysis</Button>
                 </Stack>
                 {userInfo &&
                     <Stack css={userPanelStyles} spacing={2} direction="row" alignItems="center" justifyContent="start">

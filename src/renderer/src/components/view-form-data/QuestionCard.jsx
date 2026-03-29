@@ -1,6 +1,7 @@
 import { Box, Card, CardContent, Stack, Typography } from "@mui/material";
 import { css } from "@emotion/react";
 import NumericQuestionSection from "./NumericQuestionSection";
+import ChoiceQuestionSection from "./ChoiceQuestionSection";
 import TextResponsesSection from "./TextResponsesSection";
 
 const questionHeaderCss = css`
@@ -33,6 +34,11 @@ export default function QuestionCard({ question, searchValue, onSearchChange }) 
                         <Typography variant="h6" css={questionTitleCss}>
                             {question.label}
                         </Typography>
+                        {!!question.questionText && (
+                            <Typography color="text.secondary" variant="body2">
+                                {question.questionText}
+                            </Typography>
+                        )}
                         <Typography color="text.secondary" variant="body2" css={questionMetaCss}>
                             Question ID: {question.questionId}
                         </Typography>
@@ -42,8 +48,10 @@ export default function QuestionCard({ question, searchValue, onSearchChange }) 
                     </Box>
 
                     <Box css={questionContentCss}>
-                        {question.isNumeric ? (
+                        {question.viewType === "number" ? (
                             <NumericQuestionSection question={question} />
+                        ) : question.viewType === "choice" ? (
+                            <ChoiceQuestionSection question={question} />
                         ) : (
                             <TextResponsesSection
                                 question={question}

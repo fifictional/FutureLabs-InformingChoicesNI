@@ -34,8 +34,14 @@ const api = {
     update: (id, data) => ipcRenderer.invoke('forms:update', id, data),
     refreshSchemaAndResponses: (id) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', id)
   },
+  refresh: {
+    form: (formId) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', formId),
+    allForms: () => ipcRenderer.invoke('forms:refreshAllGoogleForms')
+  },
   questions: {
     listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),
+    listChoicesByQuestion: (questionId) =>
+      ipcRenderer.invoke('questions:listChoicesByQuestion', questionId),
     create: (formId) => ipcRenderer.invoke('questions:create', formId),
     delete: (id) => ipcRenderer.invoke('questions:delete', id)
   },

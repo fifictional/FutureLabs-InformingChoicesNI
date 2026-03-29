@@ -157,6 +157,9 @@ ipcMain.handle('forms:refreshSchemaAndResponses', (_event, id) =>
 ipcMain.handle('questions:listByForm', (_event, formId) =>
   questionService.listQuestionsByForm(formId)
 );
+ipcMain.handle('questions:listChoicesByQuestion', (_event, questionId) =>
+  questionService.listQuestionChoicesByQuestion(questionId)
+);
 ipcMain.handle('questions:create', (_event, formId) => questionService.createQuestion(formId));
 ipcMain.handle('questions:delete', (_event, id) => questionService.deleteQuestion(id));
 

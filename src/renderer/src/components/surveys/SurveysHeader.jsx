@@ -47,7 +47,6 @@ export default function SurveysHeader(props) {
   const [excelMeta, setExcelMeta] = useState(null);
   const [importFormName, setImportFormName] = useState("");
   const [importEventName, setImportEventName] = useState("");
-  const [importEventDesc, setImportEventDesc] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [googleImportDialogOpen, setGoogleImportDialogOpen] = useState(false);
@@ -72,7 +71,6 @@ export default function SurveysHeader(props) {
     if (excelImportOpen && excelMeta) {
       setImportFormName(excelMeta.suggestedFormName || "");
       setImportEventName(excelMeta.suggestedEventName || "");
-      setImportEventDesc("");
       setImportErr("");
     }
   }, [excelImportOpen, excelMeta]);
@@ -136,7 +134,6 @@ export default function SurveysHeader(props) {
       buffer: excelBuffer,
       formName: importFormName.trim(),
       eventName: importEventName.trim(),
-      eventDescription: importEventDesc.trim() || undefined,
     });
 
     setImportBusy(false);
@@ -146,7 +143,6 @@ export default function SurveysHeader(props) {
       return;
     }
 
-    window.alert("Import finished.");
     closeExcelImportDialog();
     onRefresh();
   }
@@ -346,8 +342,6 @@ export default function SurveysHeader(props) {
         setImportFormName={setImportFormName}
         importEventName={importEventName}
         setImportEventName={setImportEventName}
-        importEventDesc={importEventDesc}
-        setImportEventDesc={setImportEventDesc}
         needsImportEvent={needsImportEvent}
         importErr={importErr}
         canDoImport={canDoImport}
