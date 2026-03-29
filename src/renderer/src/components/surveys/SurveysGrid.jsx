@@ -12,17 +12,28 @@ const columns = [
     headerName: "Link",
     width: 100,
     renderCell: (params) => (
-      <IconButton color="primary" onClick={() => window.open(params.value, "_blank")}>
-        <LaunchIcon />
-      </IconButton>
+      <>
+      {params.row.source === "Google Forms" && params.value ? (
+        <IconButton color="primary" onClick={() => {window.api.googleForms.openInBrowserByBaseLink(params.value);}}>
+          <LaunchIcon />
+        </IconButton>
+      ) : (<></>)}
+      </>
     ),
   },
 ];
 
-export default function SurveysGrid({ rows, onSelect }) {
+export default function SurveysGrid({ rows, onSelect, loading }) {
   return (
     <DataGrid
       columns={columns}
+      loading={loading}
+      slotProps={{
+        loadingOverlay: {
+          variant: 'linear-progress',
+          noRowsVariant: 'skeleton',
+        },
+      }}
       rows={rows}
       onRowSelectionModelChange={(newSelection) =>
         onSelect(newSelection.ids?.values()?.next()?.value || null)

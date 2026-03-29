@@ -1,12 +1,16 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
-import slugify from "slugify";
+import EventSelectorAutocomplete from "../events/EventSelectorAutocomplete.jsx";
+import CreateEventDialog from "../events/CreateEventDialog.jsx";
 
 export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ...props }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [newName, setNewName] = useState(survey?.name || '');
     const [newEventName, setNewEventName] = useState(survey?.eventName || '');
+    const [createEventOpen, setCreateEventOpen] = useState(false);
+    const [pendingNewEventName, setPendingNewEventName] = useState('');
+    const [eventSelectorReloadToken, setEventSelectorReloadToken] = useState(0);
 
     const handleSave = async () => {
         setLoading(true);
@@ -52,7 +56,18 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
                     <Typography mb={2}>Edit survey details.</Typography>
                     <Stack spacing={2}>
                         <TextField value={newName} onChange={(e) => setNewName(e.target.value)} label="Survey Name" fullWidth />
-                        <TextField value={newEventName} onChange={(e) => setNewEventName(e.target.value)} label="New Event Name" fullWidth />
+                        <EventSelectorAutocomplete
+                            value={newEventName}
+                            onChange={setNewEventName}
+                            label="Event"
+                            required
+                            disabled={loading}
+                            reloadToken={`${open}-${eventSelectorReloadToken}`}
+                            onAddRequested={(typedName) => {
+                                setPendingNewEventName(typedName || '');
+                                setCreateEventOpen(true);
+                            }}
+                        />
                         {error && <Typography color="error">{error}</Typography>}
                     </Stack>
                 </DialogContent>
@@ -61,6 +76,22 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
                     <Button disabled={loading} variant="contained" onClick={handleSave}>Save</Button>
                 </DialogActions>
             </Dialog>
+
+            <CreateEventDialog
+                open={createEventOpen}
+                onClose={() => setCreateEventOpen(false)}
+                initialName={pendingNewEventName}
+                title="Create Event"
+                helperText="Create a new event and it will be selected for this survey."
+                onCreated={(event) => {
+                    if (event?.name) {
+                        setNewEventName(event.name);
+                    } else if (pendingNewEventName) {
+                        setNewEventName(pendingNewEventName);
+                    }
+                    setEventSelectorReloadToken((prev) => prev + 1);
+                }}
+            />
         </>
     )
 }

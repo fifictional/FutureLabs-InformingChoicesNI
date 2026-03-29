@@ -15,6 +15,7 @@ import {
   MenuItem,
   OutlinedInput,
   Select,
+  Skeleton,
   Stack,
   Typography
 } from '@mui/material';
@@ -230,9 +231,6 @@ export default function Analyse() {
   return (
     <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100%' }}>
       <Stack spacing={2} sx={{ maxWidth: 1000, mx: 'auto' }}>
-        <Typography variant="h4" fontWeight={700}>
-          Analyse Survey Questions
-        </Typography>
         <Typography color="text.secondary">
           Compare identical questions across surveys and view a combined response distribution.
         </Typography>
@@ -322,7 +320,7 @@ export default function Analyse() {
                       Submit Selection
                     </Button>
                   </Box>
-
+                  
                   {aggregateResult && (
                     <Stack spacing={2}>
                       <Typography variant="h6">Aggregated Results</Typography>

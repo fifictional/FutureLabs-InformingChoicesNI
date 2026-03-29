@@ -12,7 +12,11 @@ import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
-import { createGoogleForm, openGoogleFormInBrowser } from './common/google-forms/google-forms.js';
+import {
+  createGoogleForm,
+  openGoogleFormInBrowserByBaseLink,
+  openGoogleFormInBrowserById
+} from './common/google-forms/google-forms.js';
 import {
   ensureAuthenticated,
   getUserProfile,
@@ -146,13 +150,20 @@ ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsBy
 ipcMain.handle('forms:create', (_event, data) => formService.createForm(data));
 ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id));
 ipcMain.handle('forms:update', (_event, id, data) => formService.updateForm(id, data));
+ipcMain.handle('forms:refreshSchemaAndResponses', (_event, id) =>
+  formService.refreshSchemaAndResponses(id)
+);
 
 ipcMain.handle('questions:listByForm', (_event, formId) =>
   questionService.listQuestionsByForm(formId)
 );
+ipcMain.handle('questions:listChoicesByQuestion', (_event, questionId) =>
+  questionService.listQuestionChoicesByQuestion(questionId)
+);
 ipcMain.handle('questions:create', (_event, formId) => questionService.createQuestion(formId));
 ipcMain.handle('questions:delete', (_event, id) => questionService.deleteQuestion(id));
 
+ipcMain.handle('submissions:countAll', () => submissionService.countAllSubmissions());
 ipcMain.handle('submissions:listByForm', (_event, formId) =>
   submissionService.listSubmissionsByForm(formId)
 );
@@ -175,11 +186,20 @@ ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageTo
 ipcMain.handle('googleForms:create', (_event, title, document_title) =>
   createGoogleForm(title, document_title)
 );
-ipcMain.handle('googleForms:openInBrowser', (_event, formId) => openGoogleFormInBrowser(formId));
+ipcMain.handle('googleForms:openInBrowserById', (_event, formId) =>
+  openGoogleFormInBrowserById(formId)
+);
+ipcMain.handle('googleForms:openInBrowserByBaseLink', (_event, baseLink) =>
+  openGoogleFormInBrowserByBaseLink(baseLink)
+);
 ipcMain.handle('googleForms:importSelected', async (_event, payload) => {
   try {
     const { formIds, eventName, eventDescription, formNameOverride } = payload || {};
-    const result = await importGoogleForms(formIds, { eventName, eventDescription, formNameOverride });
+    const result = await importGoogleForms(formIds, {
+      eventName,
+      eventDescription,
+      formNameOverride
+    });
     return { ok: true, ...result };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };

@@ -1,6 +1,12 @@
 import { getDb } from '../client';
 import { submissions } from '../schema';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
+
+export async function countAllSubmissions() {
+  const result = await getDb().select({ count: count() }).from(submissions);
+
+  return result[0]?.count ?? 0;
+}
 
 export async function listSubmissionsByForm(formId) {
   return getDb().select().from(submissions).where(eq(submissions.formId, formId));

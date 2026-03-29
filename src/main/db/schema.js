@@ -1,3 +1,4 @@
+import { name } from '@electron-toolkit/eslint-config-prettier';
 import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Define the SQL database schema using Drizzle ORM's SQLite adapter
@@ -42,6 +43,8 @@ export const forms = sqliteTable('forms', {
 
 export const questions = sqliteTable('questions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  text: text('text').notNull(),
+  answerType: text('answer_type', { enum: ['text', 'number', 'choice'] }).notNull(),
   formId: integer('form_id')
     .notNull()
     .references(() => forms.id, { onDelete: 'cascade' })
@@ -81,3 +84,23 @@ export const responses = sqliteTable(
     )
   ]
 );
+
+export const statisticOverviews = sqliteTable('statistic_overviews', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  defaultQuestion: text('default_question').notNull(),
+  questionId: integer('question_id').references(() => questions.id, { onDelete: 'set null' })
+});
+
+export const questionChoice = sqliteTable('question_choice', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  questionId: integer('question_id'),
+  choiceText: text('choice_text').notNull()
+});
+
+export const clients = sqliteTable('clients', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  nonConfidentialIdentifier: text('non_confidential_identifier'),
+  dateOfBirth: integer('date_of_birth', { mode: 'timestamp' }),
+  referenceId: text('reference_id').notNull().unique()
+});

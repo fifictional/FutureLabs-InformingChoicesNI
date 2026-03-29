@@ -4,7 +4,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -12,81 +11,196 @@ import {
   Stack,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { CloudDownload, UploadFile } from "@mui/icons-material";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DeleteSurveyDialog from "./DeleteSurveyDialog";
 import EditSurveyDialog from "./EditSurveyDialog";
 import { GoogleFormPicker } from "../google-forms/GoogleFormPicker";
 import CreateSurveyDialog from "./CreateSurveyDialog";
 import ExcelImportDialog from "./ExcelImportDialog";
 import { Link } from "react-router";
+import GetUserSpecificLinkDialog from "./GetUserSpecificLinkDialog";
+import EventSelectorAutocomplete from "../events/EventSelectorAutocomplete.jsx";
+import CreateEventDialog from "../events/CreateEventDialog.jsx";
 
 export default function SurveysHeader(props) {
-  const {
-    theme,
-    selectedSurvey,
-    selectedSurveyObject,
+  const { selectedSurveyObject, onRefresh } = props;
+  const theme = useTheme();
 
-    actionsMenuAnchorEl,
-    actionsMenuOpened,
-    onOpenActionsMenu,
-    onCloseActionsMenu,
+  const [actionsMenuAnchorEl, setActionsMenuAnchorEl] = useState(null);
+  const [importMenuAnchorEl, setImportMenuAnchorEl] = useState(null);
+  const [deleteSurveyDialogOpen, setDeleteSurveyDialogOpen] = useState(false);
+  const [editSurveyDialogOpen, setEditSurveyDialogOpen] = useState(false);
+  const [getUserSpecificLinkDialogOpen, setGetUserSpecificLinkDialogOpen] = useState(false);
 
-    importMenuAnchorEl,
-    importMenuOpened,
-    onOpenImportMenu,
-    onCloseImportMenu,
+  const [createSurveyDialogOpen, setCreateSurveyDialogOpen] = useState(false);
+  const [newSurveyName, setNewSurveyName] = useState("");
+  const [newSurveyCreationLoading, setNewSurveyCreationLoading] = useState(false);
+  const [newSurveyCreationError, setNewSurveyCreationError] = useState(null);
 
-    deleteSurveyDialogOpen,
-    setDeleteSurveyDialogOpen,
-    editSurveyDialogOpen,
-    setEditSurveyDialogOpen,
+  const [googleFormPickerOpen, setGoogleFormPickerOpen] = useState(false);
+  const excelFileInputRef = useRef(null);
+  const [excelImportOpen, setExcelImportOpen] = useState(false);
+  const [excelBuffer, setExcelBuffer] = useState(null);
+  const [excelMeta, setExcelMeta] = useState(null);
+  const [importFormName, setImportFormName] = useState("");
+  const [importEventName, setImportEventName] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importErr, setImportErr] = useState("");
+  const [googleImportDialogOpen, setGoogleImportDialogOpen] = useState(false);
+  const [googleImportPendingIds, setGoogleImportPendingIds] = useState(null);
+  const [googleImportEventName, setGoogleImportEventName] = useState("");
+  const [googleImportCreateEventOpen, setGoogleImportCreateEventOpen] = useState(false);
+  const [googleImportPendingNewEventName, setGoogleImportPendingNewEventName] = useState("");
+  const [googleImportEventSelectorReloadToken, setGoogleImportEventSelectorReloadToken] = useState(0);
+  const [googleImportFormName, setGoogleImportFormName] = useState("");
+  const [googleImportBusy, setGoogleImportBusy] = useState(false);
+  const [googleImportErr, setGoogleImportErr] = useState("");
 
-    createSurveyDialogOpen,
-    setCreateSurveyDialogOpen,
-    newSurveyName,
-    setNewSurveyName,
-    newSurveyCreationLoading,
-    newSurveyCreationError,
-    handleCreateSurveySubmit,
+  const actionsMenuOpened = Boolean(actionsMenuAnchorEl);
+  const importMenuOpened = Boolean(importMenuAnchorEl);
 
-    googleFormPickerOpen,
-    setGoogleFormPickerOpen,
-    onGoogleFormsPickedForImport,
+  const needsImportEvent = !excelMeta?.hasPerRowEvent;
+  const canDoImport =
+    importFormName.trim() !== "" &&
+    (!needsImportEvent || importEventName.trim() !== "") &&
+    !importBusy &&
+    excelBuffer;
 
-    googleImportDialogOpen,
-    googleImportEventName,
-    setGoogleImportEventName,
-    googleImportEventDesc,
-    setGoogleImportEventDesc,
-    googleImportFormName,
-    setGoogleImportFormName,
-    googleImportBusy,
-    googleImportErr,
-    onCloseGoogleImportDialog,
-    onConfirmGoogleImport,
+  useEffect(() => {
+    if (excelImportOpen && excelMeta) {
+      setImportFormName(excelMeta.suggestedFormName || "");
+      setImportEventName(excelMeta.suggestedEventName || "");
+      setImportErr("");
+    }
+  }, [excelImportOpen, excelMeta]);
 
-    excelFileInputRef,
-    handleExcelFileChosen,
-    excelImportOpen,
-    closeExcelImportDialog,
-    excelMeta,
-    importFormName,
-    setImportFormName,
-    importEventName,
-    setImportEventName,
-    importEventDesc,
-    setImportEventDesc,
-    needsImportEvent,
-    importBusy,
-    importErr,
-    canDoImport,
-    handleExcelImportSubmit,
+  async function handleCreateSurveySubmit() {
+    if (!newSurveyName.trim()) return;
 
-    onRefresh,
-  } = props;
+    setNewSurveyCreationLoading(true);
+    setNewSurveyCreationError(null);
+
+    try {
+      const newForm = await window.api.googleForms.create(
+        newSurveyName.trim(),
+        newSurveyName.trim()
+      );
+      setCreateSurveyDialogOpen(false);
+      setNewSurveyName("");
+      window.api.googleForms.openInBrowserById(newForm.formId);
+      onRefresh();
+    } catch {
+      setNewSurveyCreationError("Failed to create survey. Please try again.");
+    } finally {
+      setNewSurveyCreationLoading(false);
+    }
+  }
+
+  async function handleExcelFileChosen(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await window.api.surveys.parseExcelImport(buf);
+
+      if (!res.ok) {
+        window.alert(res.error || "Could not read Excel file");
+        return;
+      }
+
+      setExcelBuffer(buf);
+      setExcelMeta(res);
+      setExcelImportOpen(true);
+    } catch (err) {
+      window.alert(err?.message || String(err));
+    }
+  }
+
+  function closeExcelImportDialog() {
+    if (importBusy) return;
+    setExcelImportOpen(false);
+    setExcelBuffer(null);
+    setExcelMeta(null);
+  }
+
+  async function handleExcelImportSubmit() {
+    setImportBusy(true);
+    setImportErr("");
+
+    const res = await window.api.surveys.commitExcelImport({
+      buffer: excelBuffer,
+      formName: importFormName.trim(),
+      eventName: importEventName.trim(),
+    });
+
+    setImportBusy(false);
+
+    if (!res.ok) {
+      setImportErr(res.error || "Import failed");
+      return;
+    }
+
+    closeExcelImportDialog();
+    onRefresh();
+  }
+
+  function handleGoogleFormsPickedForImport(selectedFormIds) {
+    if (!selectedFormIds?.length) return;
+    setGoogleImportPendingIds(selectedFormIds);
+    setGoogleImportEventName("");
+    setGoogleImportFormName("");
+    setGoogleImportErr("");
+    setGoogleFormPickerOpen(false);
+    setGoogleImportDialogOpen(true);
+  }
+
+  function closeGoogleImportDialog() {
+    if (googleImportBusy) return;
+    setGoogleImportDialogOpen(false);
+    setGoogleImportPendingIds(null);
+    setGoogleImportErr("");
+  }
+
+  async function confirmGoogleImport() {
+    if (!googleImportPendingIds?.length) return;
+    if (!googleImportEventName.trim()) {
+      setGoogleImportErr("Event name is required.");
+      return;
+    }
+    setGoogleImportBusy(true);
+    setGoogleImportErr("");
+    try {
+      const res = await window.api.googleForms.importSelected({
+        formIds: googleImportPendingIds,
+        eventName: googleImportEventName.trim(),
+        formNameOverride: googleImportFormName.trim() || undefined,
+      });
+      if (!res?.ok) {
+        setGoogleImportErr(res?.error || "Import failed");
+        return;
+      }
+      closeGoogleImportDialog();
+      onRefresh();
+    } catch (e) {
+      setGoogleImportErr(e?.message || String(e));
+    } finally {
+      setGoogleImportBusy(false);
+    }
+  }
+
+  function closeExcelImportDialog() {
+    if (importBusy) return;
+    setExcelImportOpen(false);
+    setExcelBuffer(null);
+    setExcelMeta(null);
+  }
 
   return (
     <Stack direction="row" spacing={2} alignItems="center" mb={1}>
@@ -95,7 +209,7 @@ export default function SurveysHeader(props) {
       </Typography>
 
       <Button
-        onClick={onOpenActionsMenu}
+        onClick={(event) => setActionsMenuAnchorEl(event.currentTarget)}
         variant="contained"
         color={theme.palette.primary.accent}
         endIcon={<ArrowDropDownIcon />}
@@ -107,20 +221,20 @@ export default function SurveysHeader(props) {
         label="Actions"
         anchorEl={actionsMenuAnchorEl}
         open={actionsMenuOpened}
-        onClose={onCloseActionsMenu}
+        onClose={() => setActionsMenuAnchorEl(null)}
       >
-        <MenuItem disabled={!selectedSurvey} value="view-data" component={Link} to={"/surveys/data/" + selectedSurveyObject?.id}>
+        <MenuItem disabled={!selectedSurveyObject} value="view-data" component={Link} to={"/surveys/data/" + selectedSurveyObject?.id}>
           View Data
         </MenuItem>
         <MenuItem
-          disabled={!selectedSurvey || selectedSurveyObject?.provider !== "google_forms"}
+          disabled={!selectedSurveyObject || selectedSurveyObject?.provider !== "google_forms"}
           value="view-on-browser"
           onClick={() => {
-            if (selectedSurveyObject?.baseLink) {
-              window.api.openExternal(selectedSurveyObject.baseLink);
-            } else if (selectedSurveyObject?.externalId) {
+            if (selectedSurveyObject?.externalId) {
               const googleFormsBaseUrl = "https://docs.google.com/forms/d/";
-              window.api.openExternal(googleFormsBaseUrl + selectedSurveyObject.externalId);
+              window.api.googleForms.openInBrowserById(selectedSurveyObject.externalId);
+            } else if (selectedSurveyObject?.baseLink) {
+              window.api.googleForms.openInBrowserByBaseLink(selectedSurveyObject.baseLink);
             } else {
               alert("No link available for this survey.");
             }
@@ -128,10 +242,17 @@ export default function SurveysHeader(props) {
         >
           View on Browser
         </MenuItem>
-        <MenuItem disabled={!selectedSurvey} value="edit" onClick={() => setEditSurveyDialogOpen(true)}>
+        <MenuItem
+          disabled={!selectedSurveyObject || selectedSurveyObject?.provider !== "google_forms"}
+          value="get-user-link"
+          onClick={() => setGetUserSpecificLinkDialogOpen(true)}
+        >
+          Get User Specific Link
+        </MenuItem>
+        <MenuItem disabled={!selectedSurveyObject} value="edit" onClick={() => setEditSurveyDialogOpen(true)}>
           Edit Details
         </MenuItem>
-        <MenuItem disabled={!selectedSurvey} value="delete" onClick={() => setDeleteSurveyDialogOpen(true)}>
+        <MenuItem disabled={!selectedSurveyObject} value="delete" onClick={() => setDeleteSurveyDialogOpen(true)}>
           Delete
         </MenuItem>
       </Menu>
@@ -150,6 +271,12 @@ export default function SurveysHeader(props) {
         onEdit={onRefresh}
       />
 
+      <GetUserSpecificLinkDialog
+        open={getUserSpecificLinkDialogOpen}
+        onClose={() => setGetUserSpecificLinkDialogOpen(false)}
+        survey={selectedSurveyObject}
+      />
+
       <Button variant="contained" endIcon={<AddIcon />} onClick={() => setCreateSurveyDialogOpen(true)}>
         Create New Survey
       </Button>
@@ -165,7 +292,7 @@ export default function SurveysHeader(props) {
       />
 
       <Button
-        onClick={onOpenImportMenu}
+        onClick={(event) => setImportMenuAnchorEl(event.currentTarget)}
         variant="contained"
         color="accent"
         endIcon={<ArrowDropDownIcon />}
@@ -177,7 +304,7 @@ export default function SurveysHeader(props) {
         label="Actions"
         anchorEl={importMenuAnchorEl}
         open={importMenuOpened}
-        onClose={onCloseImportMenu}
+        onClose={() => setImportMenuAnchorEl(null)}
       >
         <MenuItem value="from-google-drive" onClick={() => setGoogleFormPickerOpen(true)}>
           <ListItemIcon>
@@ -189,7 +316,7 @@ export default function SurveysHeader(props) {
         <MenuItem
           value="upload-file"
           onClick={() => {
-            onCloseImportMenu();
+            setImportMenuAnchorEl(null);
             excelFileInputRef.current?.click();
           }}
         >
@@ -217,8 +344,6 @@ export default function SurveysHeader(props) {
         setImportFormName={setImportFormName}
         importEventName={importEventName}
         setImportEventName={setImportEventName}
-        importEventDesc={importEventDesc}
-        setImportEventDesc={setImportEventDesc}
         needsImportEvent={needsImportEvent}
         importErr={importErr}
         canDoImport={canDoImport}
@@ -229,16 +354,16 @@ export default function SurveysHeader(props) {
         <GoogleFormPicker
           onCancel={() => setGoogleFormPickerOpen(false)}
           onSubmit={(ids) => {
-            onGoogleFormsPickedForImport?.(ids);
+            handleGoogleFormsPickedForImport(ids);
           }}
         />
       </Dialog>
 
-      <Dialog open={googleImportDialogOpen} onClose={onCloseGoogleImportDialog} fullWidth maxWidth="sm">
+      <Dialog open={googleImportDialogOpen} onClose={closeGoogleImportDialog} fullWidth maxWidth="sm">
         <DialogTitle>Import Google Forms</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Choose an event for the imported forms. A new event is created if the name does not exist yet.
+            Choose an event for the imported forms.
           </Typography>
           <TextField
             margin="dense"
@@ -248,22 +373,17 @@ export default function SurveysHeader(props) {
             onChange={(e) => setGoogleImportFormName(e.target.value)}
             disabled={googleImportBusy}
           />
-          <TextField
-            margin="dense"
-            label="Event name"
-            fullWidth
-            required
+          <EventSelectorAutocomplete
             value={googleImportEventName}
-            onChange={(e) => setGoogleImportEventName(e.target.value)}
+            onChange={setGoogleImportEventName}
+            required
             disabled={googleImportBusy}
-          />
-          <TextField
-            margin="dense"
-            label="Event description (optional)"
-            fullWidth
-            value={googleImportEventDesc}
-            onChange={(e) => setGoogleImportEventDesc(e.target.value)}
-            disabled={googleImportBusy}
+            reloadToken={`${googleImportDialogOpen}-${googleImportEventSelectorReloadToken}`}
+            label="Event"
+            onAddRequested={(typedName) => {
+              setGoogleImportPendingNewEventName(typedName || "");
+              setGoogleImportCreateEventOpen(true);
+            }}
           />
           {googleImportErr ? (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
@@ -272,18 +392,34 @@ export default function SurveysHeader(props) {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onCloseGoogleImportDialog} disabled={googleImportBusy}>
+          <Button onClick={closeGoogleImportDialog} disabled={googleImportBusy}>
             Cancel
           </Button>
           <Button
             variant="contained"
-            onClick={onConfirmGoogleImport}
+            onClick={confirmGoogleImport}
             disabled={googleImportBusy || !googleImportEventName.trim()}
           >
             Import
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CreateEventDialog
+        open={googleImportCreateEventOpen}
+        onClose={() => setGoogleImportCreateEventOpen(false)}
+        initialName={googleImportPendingNewEventName}
+        title="Create Event"
+        helperText="Create a new event and it will be selected for this Google Forms import."
+        onCreated={(event) => {
+          if (event?.name) {
+            setGoogleImportEventName(event.name);
+          } else if (googleImportPendingNewEventName) {
+            setGoogleImportEventName(googleImportPendingNewEventName);
+          }
+          setGoogleImportEventSelectorReloadToken((prev) => prev + 1);
+        }}
+      />
     </Stack>
   );
 }

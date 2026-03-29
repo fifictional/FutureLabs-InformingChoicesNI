@@ -28,11 +28,9 @@ const theme = createTheme({
 });
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <ThemeProvider theme={theme}>
-      <HashRouter>
-        <App />
-      </HashRouter>
-    </ThemeProvider>
-  </StrictMode>
+  <ThemeProvider theme={theme}>
+    <HashRouter>
+      <App />
+    </HashRouter>
+  </ThemeProvider>
 );

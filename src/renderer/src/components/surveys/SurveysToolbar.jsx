@@ -1,6 +1,7 @@
 import { Autocomplete, Button, Stack, TextField } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { css } from "@mui/material/styles";
+import { useMemo, useState } from "react";
 
 const toolbarStyle = css`
   padding: 0.5em 0;
@@ -21,11 +22,20 @@ const filterboxStyle = css`
 
 export default function SurveysToolbar({
   loading,
-  filterOptions,
-  filterValue,
-  setFilterValue,
+  forms,
   onRefresh,
 }) {
+  const [filterValue, setFilterValue] = useState("");
+
+  const filterOptions = useMemo(
+    () =>
+      forms.map((form) => ({
+        id: form.id,
+        label: form.name || "Untitled Form",
+      })),
+    [forms]
+  );
+
   return (
     <Stack css={toolbarStyle} direction="row" alignItems="center">
       <Autocomplete

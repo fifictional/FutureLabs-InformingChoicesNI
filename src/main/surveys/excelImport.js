@@ -5,6 +5,183 @@ import * as questionService from '../db/services/questionService.js';
 import * as submissionService from '../db/services/submissionService.js';
 import * as responseService from '../db/services/responseService.js';
 
+function toTrimmedString(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeAnswerType(value) {
+  const t = toTrimmedString(value).toLowerCase();
+  if (!t) return null;
+  if (t === 'text' || t === 'string') return 'text';
+  if (t === 'number' || t === 'numeric' || t === 'float' || t === 'integer' || t === 'int') {
+    return 'number';
+  }
+  if (t === 'choice' || t === 'select' || t === 'radio' || t === 'dropdown' || t === 'enum') {
+    return 'choice';
+  }
+  return null;
+}
+
+function parseChoiceValues(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((v) => toTrimmedString(v)).filter(Boolean);
+
+  const text = toTrimmedString(raw);
+  if (!text) return [];
+
+  if (text.startsWith('[') && text.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.map((v) => toTrimmedString(v)).filter(Boolean);
+    } catch {
+      // Fall back to delimiter parsing.
+    }
+  }
+
+  return text
+    .split(/[|;,]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function dedupeChoices(values) {
+  const out = [];
+  const seen = new Set();
+  for (const value of values || []) {
+    const text = toTrimmedString(value);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
+}
+
+function extractQuestionMetadataFromWorkbook(wb, headerRow, questionIndices) {
+  const sheetNames = wb.SheetNames || [];
+  if (sheetNames.length <= 1) return { metadataByHeader: new Map(), metadataSheetName: null };
+
+  const headerByLookupKey = new Map();
+  for (const colIdx of questionIndices) {
+    const questionText = toTrimmedString(headerRow[colIdx] || `Column ${colIdx + 1}`);
+    if (!questionText) continue;
+    headerByLookupKey.set(questionText.toLowerCase(), questionText);
+    headerByLookupKey.set(String(colIdx + 1), questionText);
+  }
+
+  for (const sheetName of sheetNames.slice(1)) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    if (!rows.length) continue;
+
+    const metaHeader = rows[0].map((c) => toTrimmedString(c));
+    const questionCol = metaHeader.findIndex((h) =>
+      /^(question|question text|question header|column|column name|field)$/i.test(h)
+    );
+    const answerTypeCol = metaHeader.findIndex((h) => /^(answer type|answertype|type)$/i.test(h));
+    const choicesCol = metaHeader.findIndex((h) => /^(choices|choice|options|option)$/i.test(h));
+
+    if (questionCol < 0 || (answerTypeCol < 0 && choicesCol < 0)) continue;
+
+    const metadataByHeader = new Map();
+    for (const row of rows.slice(1)) {
+      const rawQuestionRef = toTrimmedString(row[questionCol]);
+      if (!rawQuestionRef) continue;
+
+      const targetHeader =
+        headerByLookupKey.get(rawQuestionRef) ||
+        headerByLookupKey.get(rawQuestionRef.toLowerCase());
+      if (!targetHeader) continue;
+
+      const key = targetHeader.toLowerCase();
+      const existing = metadataByHeader.get(key) || { answerType: null, options: [] };
+
+      const answerType = answerTypeCol >= 0 ? normalizeAnswerType(row[answerTypeCol]) : null;
+      const parsedChoices =
+        choicesCol >= 0 ? dedupeChoices(parseChoiceValues(row[choicesCol])) : [];
+
+      if (answerType) existing.answerType = answerType;
+      if (parsedChoices.length > 0) existing.options = parsedChoices;
+
+      metadataByHeader.set(key, existing);
+    }
+
+    if (metadataByHeader.size > 0) {
+      return { metadataByHeader, metadataSheetName: sheetName };
+    }
+  }
+
+  return { metadataByHeader: new Map(), metadataSheetName: null };
+}
+
+function buildQuestionDefinitions(rowsForForm, questionIndices, headerRow, metadataByHeader) {
+  return questionIndices.map((colIdx) => {
+    const text = toTrimmedString(headerRow[colIdx] || `Column ${colIdx + 1}`);
+    const inferred = inferQuestionDefinition(rowsForForm, colIdx, text);
+    const metadata = metadataByHeader.get(text.toLowerCase());
+
+    const answerType = metadata?.answerType || inferred.answerType;
+    let options = [];
+    if (answerType === 'choice') {
+      options = dedupeChoices(metadata?.options?.length ? metadata.options : inferred.options);
+    }
+
+    return { text, answerType, options };
+  });
+}
+
+function inferQuestionDefinition(rowsForForm, colIdx, fallbackTitle) {
+  const values = [];
+  const normalizedOptions = new Map();
+  let allNumeric = true;
+
+  for (const row of rowsForForm) {
+    const cell = row[colIdx];
+    if (cell == null || cell === '') continue;
+
+    const text = String(cell).trim();
+    if (!text) continue;
+
+    values.push(text);
+    const key = text.toLowerCase();
+    if (!normalizedOptions.has(key)) normalizedOptions.set(key, text);
+
+    const num = Number(text);
+    if (Number.isNaN(num) || !Number.isFinite(num) || text !== String(num)) {
+      allNumeric = false;
+    }
+  }
+
+  if (values.length === 0) {
+    return {
+      text: fallbackTitle,
+      answerType: 'text',
+      options: []
+    };
+  }
+
+  if (allNumeric) {
+    return {
+      text: fallbackTitle,
+      answerType: 'number',
+      options: []
+    };
+  }
+
+  const options = [...normalizedOptions.values()];
+  const hasRepeatedValues = options.length < values.length;
+  const shouldTreatAsChoice = options.length >= 2 && options.length <= 12 && hasRepeatedValues;
+
+  return {
+    text: fallbackTitle,
+    answerType: shouldTreatAsChoice ? 'choice' : 'text',
+    options: shouldTreatAsChoice ? options : []
+  };
+}
+
 export function parseExcelImport(bufferLike) {
   let buffer;
   if (!bufferLike) throw new Error('No file data');
@@ -29,6 +206,7 @@ export function parseExcelImport(bufferLike) {
       questionIndices.push(i);
   }
   const headers = questionIndices.map((i) => headerRow[i] || `Column ${i + 1}`);
+  const { metadataSheetName } = extractQuestionMetadataFromWorkbook(wb, headerRow, questionIndices);
   let suggestedFormName = '';
   let suggestedEventName = '';
   if (rows.length > 1) {
@@ -47,7 +225,9 @@ export function parseExcelImport(bufferLike) {
     suggestedEventName,
     questionHeaders: headers,
     rowCount: dataRows.length,
-    hasPerRowEvent: eventCol >= 0
+    hasPerRowEvent: eventCol >= 0,
+    questionMetadataSheet: metadataSheetName,
+    hasQuestionMetadata: Boolean(metadataSheetName)
   };
 }
 
@@ -75,6 +255,11 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
       questionIndices.push(i);
   }
   const dataRows = rows.slice(1);
+  const { metadataByHeader, metadataSheetName } = extractQuestionMetadataFromWorkbook(
+    wb,
+    headerRow,
+    questionIndices
+  );
 
   const dialogForm = (formName || '').trim();
   const dialogEvent = (eventName || '').trim();
@@ -103,10 +288,19 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
       n++;
     }
 
+    const questionDefinitions = buildQuestionDefinitions(
+      rowsForForm,
+      questionIndices,
+      headerRow,
+      metadataByHeader
+    );
+
     const extId = `excel-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     const schema = JSON.stringify({
       source: 'excel',
-      questionHeaders: questionIndices.map((i) => headerRow[i] || `Column ${i + 1}`)
+      metadataSheet: metadataSheetName,
+      questionHeaders: questionDefinitions.map((q) => q.text),
+      questions: questionDefinitions
     });
     const [form] = await formService.createForm({
       name: fname,
@@ -119,7 +313,22 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
 
     const qs = [];
     for (let i = 0; i < questionIndices.length; i++) {
-      qs.push((await questionService.createQuestion(form.id))[0]);
+      const qDef = questionDefinitions[i];
+      const [questionRow] = await questionService.createQuestion({
+        formId: form.id,
+        text: qDef.text,
+        answerType: qDef.answerType
+      });
+
+      if (qDef.answerType === 'choice' && qDef.options.length > 0) {
+        await questionService.createQuestionChoices(questionRow.id, qDef.options);
+      }
+
+      qs.push({
+        ...questionRow,
+        answerType: qDef.answerType,
+        options: qDef.options
+      });
     }
 
     let rowIdx = 0;
@@ -145,23 +354,33 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
       });
 
       for (let i = 0; i < qs.length; i++) {
+        const qDef = qs[i];
         const colIdx = questionIndices[i];
         const cell = row[colIdx];
         let valueText = '';
         let valueNumber = null;
-        const valueChoice = null;
+        let valueChoice = null;
         if (cell !== null && cell !== undefined && cell !== '') {
-          if (typeof cell === 'number') {
+          const raw = String(cell).trim();
+          if (qDef.answerType === 'choice') {
+            valueChoice = raw;
+            valueText = raw;
+          } else if (typeof cell === 'number') {
             valueText = String(cell);
             valueNumber = cell;
           } else {
-            const s = String(cell).trim();
-            const num = Number(s);
-            if (s !== '' && !Number.isNaN(num) && Number.isFinite(num) && s === String(num)) {
-              valueText = s;
+            const num = Number(raw);
+            if (
+              raw !== '' &&
+              !Number.isNaN(num) &&
+              Number.isFinite(num) &&
+              raw === String(num) &&
+              qDef.answerType === 'number'
+            ) {
+              valueText = raw;
               valueNumber = num;
             } else {
-              valueText = s;
+              valueText = raw;
             }
           }
         }

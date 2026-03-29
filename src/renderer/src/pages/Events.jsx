@@ -1,11 +1,12 @@
 import { Add, ArrowDropDown, Refresh } from "@mui/icons-material";
-import { Box, Button, Chip, css, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Menu, MenuItem, setRef, Stack, TextField, Typography, useTheme } from "@mui/material";
+import { Button, Chip, css, Divider, Menu, MenuItem, Stack, TextField, Typography, useTheme } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useEffect, useMemo, useState } from "react";
 import ViewDescriptionDialog from "../components/events/ViewDescriptionDialog.jsx";
 import DeleteEventDialog from "../components/events/DeleteEventDialog.jsx";
 import EditTagsDialog from "../components/events/EditTagsDialog.jsx";
 import EditEventDialog from "../components/events/EditEventDialog.jsx";
+import CreateEventDialog from "../components/events/CreateEventDialog.jsx";
 import ContainerWithBackground from "../components/common/ContainerWithBackground.jsx";
 
 export default function Events() {
@@ -24,10 +25,6 @@ export default function Events() {
 
     // create event
     const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
-    const [newEventName, setNewEventName] = useState('');
-    const [newEventDescription, setNewEventDescription] = useState('');
-    const [newEventCreationLoading, setNewEventCreationLoading] = useState(false);
-    const [newEventCreationError, setNewEventCreationError] = useState(null);
 
     // event actions
     const [deleteEventDialogOpen, setDeleteEventDialogOpen] = useState(false);
@@ -55,24 +52,6 @@ export default function Events() {
     const handleActionsClick = (event) => {
         setActionsMenuAnchorEl(event.currentTarget);
         setActionsMenuOpened(true);
-    }
-
-    const handleEventCreation = async () => {
-        setNewEventCreationLoading(true);
-        setNewEventCreationError(null);
-
-        try {
-            await window.api.events.create({
-                name: newEventName,
-                description: newEventDescription});
-            setCreateEventDialogOpen(false);
-            setRefresh(prev => !prev);
-        } catch (error) {
-            console.error('Error creating event:', error);
-            setNewEventCreationError('Failed to create event. Make sure the event name is unique.');
-        } finally {
-            setNewEventCreationLoading(false);
-        }
     }
 
     const dataGridRows = useMemo(() => 
@@ -150,21 +129,15 @@ export default function Events() {
                 <Button variant="contained" color="accent" endIcon={<Add />} onClick={() => setCreateEventDialogOpen(true)}>
                     Create New Event
                 </Button>
-                <Dialog fullWidth maxWidth="sm" open={createEventDialogOpen} onClose={() => setCreateEventDialogOpen(false)}>
-                    <DialogTitle>Create New Event</DialogTitle>
-                    <DialogContent>
-                        <Typography mb={2}>Create a new event to group related surveys and feedback together. You can tag events to associate them to one another and later filter the events and surveys by the tags.</Typography>
-                        <Stack spacing={2}>
-                            <TextField onChange={(e) => setNewEventName(e.target.value)} label="Event Name" fullWidth />
-                            <TextField onChange={(e) => setNewEventDescription(e.target.value)} label="Description (Optional)" fullWidth multiline rows={4} />
-                            {newEventCreationError && <Typography color="error">{newEventCreationError}</Typography>}
-                        </Stack>
-                    </DialogContent>
-                    <DialogActions>
-                        <Button disabled={newEventCreationLoading} onClick={() => setCreateEventDialogOpen(false)}>Cancel</Button>
-                        <Button disabled={!newEventName || newEventCreationLoading} variant="contained" color="primary" onClick={() => handleEventCreation()}>Create</Button>
-                    </DialogActions>
-                </Dialog>
+                <CreateEventDialog
+                    open={createEventDialogOpen}
+                    onClose={() => setCreateEventDialogOpen(false)}
+                    helperText="Create a new event to group related surveys and feedback together. You can tag events to associate them to one another and later filter events and surveys by tags."
+                    onCreated={() => {
+                        setCreateEventDialogOpen(false);
+                        setRefresh(prev => !prev);
+                    }}
+                />
             </Stack>
             <Divider />
             <Stack css={toolbarStyle} direction="row" alignItems="center">

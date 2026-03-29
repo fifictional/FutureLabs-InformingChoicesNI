@@ -115,11 +115,18 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
             setError(null);
             try {
                 const response = await window.api.googleForms.list();
+                const alreadyImportedForms = await window.api.forms.list();
+
                 if (!response || !response.files) {
                     throw new Error('Invalid response from Google Drive API');
                 }
 
-                setForms(response.files);
+                // Filter out forms that have already been imported based on their IDs
+                const filteredForms = response.files.filter(form => {
+                    return !alreadyImportedForms.some(importedForm => importedForm.externalId === form.id);
+                });
+
+                setForms(filteredForms);
             } catch (error) {
                 setError(error.message);
             } finally {
