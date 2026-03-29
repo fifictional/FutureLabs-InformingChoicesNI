@@ -273,6 +273,12 @@ function buildCellColor(value, maxValue) {
   return `rgba(25, 118, 210, ${0.18 + intensity * 0.72})`;
 }
 
+function getColumnHeaderHeight(colLabels) {
+  const longestLabelLength = colLabels.reduce((max, label) => Math.max(max, label.length), 0);
+
+  return Math.max(72, longestLabelLength * 10 + 16);
+}
+
 export default function Analyse() {
   const [isQuestionSelectorOpen, setIsQuestionSelectorOpen] = useState(false);
   const [questionSelectorStep, setQuestionSelectorStep] = useState('survey');
@@ -635,6 +641,7 @@ export default function Analyse() {
               }
 
               const { result, title } = comparisonEntry;
+              const columnHeaderHeight = getColumnHeaderHeight(result.colLabels);
 
               return (
                 <Card key={comparison.id}>
@@ -655,10 +662,11 @@ export default function Analyse() {
                           <Box
                             sx={{
                               '--hm-cell-size': { xs: '56px', sm: '64px' },
+                              '--hm-header-row-size': `${columnHeaderHeight}px`,
                               '--hm-label-col': '220px',
                               display: 'grid',
                               gridTemplateColumns: `var(--hm-label-col) repeat(${result.colLabels.length}, var(--hm-cell-size))`,
-                              gridAutoRows: 'var(--hm-cell-size)',
+                              gridTemplateRows: `var(--hm-header-row-size) repeat(${result.rowLabels.length}, var(--hm-cell-size))`,
                               width: 'max-content',
                               minWidth: '100%'
                             }}
@@ -669,6 +677,7 @@ export default function Analyse() {
                                 borderBottom: '1px solid',
                                 borderColor: 'divider',
                                 display: 'flex',
+                                height: 'var(--hm-header-row-size)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 textAlign: 'center'
@@ -695,14 +704,13 @@ export default function Analyse() {
                                   borderColor: 'divider',
                                   fontWeight: 400,
                                   display: 'flex',
+                                  height: 'var(--hm-header-row-size)',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   textAlign: 'center',
                                   writingMode: 'vertical-rl',
                                   textOrientation: 'mixed',
                                   whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
                                   cursor: 'pointer',
                                   '&:hover': {
                                     backgroundColor: 'action.hover'
