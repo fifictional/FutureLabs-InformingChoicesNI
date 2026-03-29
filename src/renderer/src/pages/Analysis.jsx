@@ -1,8 +1,7 @@
 /* eslint-disable react/prop-types */
 
-import { Add, ArrowDropDown, Refresh } from '@mui/icons-material';
+import { Add, ArrowDropDown } from '@mui/icons-material';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -12,7 +11,6 @@ import {
   FormGroup,
   Menu,
   MenuItem,
-  Skeleton,
   Stack,
   TextField,
   Typography
@@ -139,7 +137,16 @@ function createQuestionBlock(type = BLOCK_TYPES.QUESTION) {
 
 function SurveyChecklist({ surveyIds, selectedSurveyIds, surveyLookup, onToggle }) {
   return (
-    <FormGroup sx={{ maxHeight: 180, overflowY: 'auto', border: '1px solid', borderColor: 'divider', p: 1, borderRadius: 1 }}>
+    <FormGroup
+      sx={{
+        maxHeight: 180,
+        overflowY: 'auto',
+        border: '1px solid',
+        borderColor: 'divider',
+        p: 1,
+        borderRadius: 1
+      }}
+    >
       {surveyIds.map((surveyId) => {
         const survey = surveyLookup[surveyId];
         if (!survey) {
@@ -194,8 +201,6 @@ function DateRangeFields({ startDate, endDate, onChange }) {
 export default function Analysis() {
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [refreshCounter, setRefreshCounter] = useState(0);
   const [blocks, setBlocks] = useState([]);
 
   const [menuAnchor, setMenuAnchor] = useState(null);
@@ -212,7 +217,6 @@ export default function Analysis() {
 
     async function fetchSurveyData() {
       setLoading(true);
-      setError('');
 
       try {
         const [forms, events] = await Promise.all([
@@ -292,7 +296,9 @@ export default function Analysis() {
               eventName: form.eventName || event?.name || 'Unknown event',
               eventTags: event?.tags || [],
               questions,
-              questionByKey: Object.fromEntries(questions.map((question) => [question.key, question])),
+              questionByKey: Object.fromEntries(
+                questions.map((question) => [question.key, question])
+              ),
               responsesByQuestionId
             };
           })
@@ -303,9 +309,6 @@ export default function Analysis() {
         }
       } catch (fetchError) {
         console.error('Failed to load analysis data', fetchError);
-        if (!cancelled) {
-          setError(fetchError?.message || 'Failed to load analysis data');
-        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -318,7 +321,7 @@ export default function Analysis() {
     return () => {
       cancelled = true;
     };
-  }, [refreshCounter]);
+  }, []);
 
   const surveyLookup = useMemo(
     () => Object.fromEntries(surveys.map((survey) => [survey.id, survey])),
@@ -477,7 +480,10 @@ export default function Analysis() {
     }
 
     if (selectionA.answerType === 'text' || selectionB.answerType === 'text') {
-      return { type: 'invalid', message: 'Text-response questions cannot be used in comparison charts.' };
+      return {
+        type: 'invalid',
+        message: 'Text-response questions cannot be used in comparison charts.'
+      };
     }
 
     const rowsA = collectQuestionRows(selectionA, {
@@ -540,7 +546,13 @@ export default function Analysis() {
         });
       });
 
-      return { type: 'heatmap', rowLabels, columnLabels, points, respondents: overlappingKeys.length };
+      return {
+        type: 'heatmap',
+        rowLabels,
+        columnLabels,
+        points,
+        respondents: overlappingKeys.length
+      };
     }
 
     if (aIsNumber && bIsNumber) {
@@ -673,7 +685,7 @@ export default function Analysis() {
     const chartData = buildQuestionChartData(block);
 
     if (chartData.type === 'empty') {
-      return <EmptyChart message="Select a question and include at least one survey to render the chart." />;
+      return <EmptyChart />;
     }
 
     if (chartData.type === 'number') {
@@ -691,11 +703,11 @@ export default function Analysis() {
     const comparisonData = buildComparisonChartData(block);
 
     if (comparisonData.type === 'invalid') {
-      return <Alert severity="warning">{comparisonData.message}</Alert>;
+      return <EmptyChart />;
     }
 
     if (comparisonData.type === 'empty') {
-      return <EmptyChart message="Choose two compatible questions with overlapping respondents." />;
+      return <EmptyChart />;
     }
 
     if (comparisonData.type === 'heatmap') {
@@ -712,17 +724,7 @@ export default function Analysis() {
       return <ScatterComparisonChart points={comparisonData.points} />;
     }
 
-    return (
-      <Stack spacing={1}>
-        <StackedHistogramChart
-          values={comparisonData.values}
-          seriesByValue={comparisonData.seriesByValue}
-        />
-        <Typography variant="caption" color="text.secondary">
-          Numeric axis: {comparisonData.numericAxisLabel}
-        </Typography>
-      </Stack>
-    );
+    return <StackedHistogramChart values={comparisonData.values} />;
   };
 
   const renderSingleQuestionBlock = (block) => {
@@ -740,7 +742,10 @@ export default function Analysis() {
                   {block.questionA.questionText}
                 </Typography>
               </Stack>
-              <Button color="error" onClick={() => setBlocks((prev) => prev.filter((item) => item.id !== block.id))}>
+              <Button
+                color="error"
+                onClick={() => setBlocks((prev) => prev.filter((item) => item.id !== block.id))}
+              >
                 Remove
               </Button>
             </Stack>
@@ -752,7 +757,7 @@ export default function Analysis() {
                   blockId: block.id,
                   slot: 'A',
                   allowText: forcedWordCloud ? 'text_only' : true,
-                  title: forcedWordCloud ? 'Select a Text Question' : 'Select a Question'
+                  title: 'Select a Question'
                 })
               }
               sx={{ alignSelf: 'start' }}
@@ -790,7 +795,10 @@ export default function Analysis() {
           <Stack spacing={2.5}>
             <Stack direction="row" justifyContent="space-between" spacing={2}>
               <Typography variant="h6">Comparison chart</Typography>
-              <Button color="error" onClick={() => setBlocks((prev) => prev.filter((item) => item.id !== block.id))}>
+              <Button
+                color="error"
+                onClick={() => setBlocks((prev) => prev.filter((item) => item.id !== block.id))}
+              >
                 Remove
               </Button>
             </Stack>
@@ -820,7 +828,7 @@ export default function Analysis() {
                         blockId: block.id,
                         slot: item.slot,
                         allowText: false,
-                        title: `Select ${item.label.toLowerCase()} (choice/number only)`
+                        title: 'Select a Question'
                       })
                     }
                     sx={{ alignSelf: 'start' }}
@@ -830,7 +838,9 @@ export default function Analysis() {
                 </Stack>
 
                 <Stack spacing={1}>
-                  <Typography variant="subtitle2">Included surveys for {item.label.toLowerCase()}</Typography>
+                  <Typography variant="subtitle2">
+                    Included surveys for {item.label.toLowerCase()}
+                  </Typography>
                   <SurveyChecklist
                     surveyIds={item.selection.availableSurveyIds}
                     selectedSurveyIds={item.selection.surveyIds}
@@ -866,34 +876,19 @@ export default function Analysis() {
           spacing={2}
           sx={{ width: '100%' }}
         >
-          <Typography color="text.secondary">
-            Build charts from live survey data across matching questions and date ranges.
-          </Typography>
-
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={() => setRefreshCounter((previous) => previous + 1)}
-            >
-              Refresh Data
-            </Button>
-            <Button
-              variant="contained"
-              endIcon={<ArrowDropDown />}
-              startIcon={<Add />}
-              onClick={(event) => setMenuAnchor(event.currentTarget)}
-            >
-              Add Chart
-            </Button>
-          </Stack>
+          <Box />
+          <Button
+            variant="contained"
+            endIcon={<ArrowDropDown />}
+            startIcon={<Add />}
+            disabled={loading}
+            onClick={(event) => setMenuAnchor(event.currentTarget)}
+          >
+            Add Chart
+          </Button>
         </Stack>
 
-        <Menu
-          anchorEl={menuAnchor}
-          open={Boolean(menuAnchor)}
-          onClose={() => setMenuAnchor(null)}
-        >
+        <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
           <MenuItem
             onClick={() => {
               setBlocks((previous) => [...previous, createQuestionBlock(BLOCK_TYPES.QUESTION)]);
@@ -919,21 +914,6 @@ export default function Analysis() {
             Add word cloud...
           </MenuItem>
         </Menu>
-
-        {error && <Alert severity="error">{error}</Alert>}
-
-        {loading && (
-          <Stack spacing={1}>
-            <Skeleton variant="rectangular" height={40} />
-            <Skeleton variant="rectangular" height={220} />
-          </Stack>
-        )}
-
-        {!loading && blocks.length === 0 && (
-          <Alert severity="info">
-            Use Add Chart to create a question chart, comparison chart, or word cloud block.
-          </Alert>
-        )}
 
         <Box
           sx={{

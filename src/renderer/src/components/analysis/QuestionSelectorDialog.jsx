@@ -50,7 +50,7 @@ export default function QuestionSelectorDialog({
         renderCell: (params) => {
           const tags = params.row.eventTags || [];
           if (!tags.length) {
-            return <Typography variant="caption">No tags</Typography>;
+            return null;
           }
 
           return (
@@ -106,28 +106,25 @@ export default function QuestionSelectorDialog({
 
           <Stack sx={{ flex: 1, minWidth: 0, maxHeight: 420 }}>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              {selectedSurvey ? `Questions in ${selectedSurvey.name}` : 'Select a survey to view questions'}
+              {selectedSurvey ? selectedSurvey.name : ''}
             </Typography>
-            <List dense sx={{ overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+            <List
+              dense
+              sx={{
+                overflowY: 'auto',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1
+              }}
+            >
               {visibleQuestions.map((question) => (
                 <ListItemButton
                   key={`${selectedSurvey.id}-${question.id}`}
                   onClick={() => onSelectQuestion(selectedSurvey.id, question)}
                 >
-                  <ListItemText
-                    primary={question.text}
-                    secondary={`Type: ${question.answerType}`}
-                    slotProps={{ secondary: { sx: { textTransform: 'capitalize' } } }}
-                  />
+                  <ListItemText primary={question.text} />
                 </ListItemButton>
               ))}
-              {selectedSurvey && visibleQuestions.length === 0 && (
-                <Box sx={{ p: 2 }}>
-                  <Typography color="text.secondary" variant="body2">
-                    No compatible questions in this survey.
-                  </Typography>
-                </Box>
-              )}
             </List>
           </Stack>
         </Stack>
@@ -135,5 +132,3 @@ export default function QuestionSelectorDialog({
     </Dialog>
   );
 }
-
-

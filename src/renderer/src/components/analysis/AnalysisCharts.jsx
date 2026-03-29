@@ -1,7 +1,8 @@
 /* eslint-disable react/prop-types */
 
-import { Fragment } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Typography } from '@mui/material';
+import cloud from 'd3-cloud';
 import {
   Bar,
   BarChart,
@@ -56,7 +57,7 @@ function buildHistogramBins(values, desiredBinCount = 8) {
   return bins;
 }
 
-export function EmptyChart({ message = 'No data to display yet.' }) {
+export function EmptyChart({ message = '' }) {
   return (
     <Box
       sx={{
@@ -70,7 +71,7 @@ export function EmptyChart({ message = 'No data to display yet.' }) {
         justifyContent: 'center'
       }}
     >
-      <Typography color="text.secondary">{message}</Typography>
+      {message ? <Typography color="text.secondary">{message}</Typography> : null}
     </Box>
   );
 }
@@ -110,63 +111,130 @@ export function NumericHistogramChart({ values }) {
 }
 
 export function WordCloudChart({ textValues }) {
-  const counts = new Map();
+  const wrapperRef = useRef(null);
+  const [width, setWidth] = useState(0);
+  const [layoutWords, setLayoutWords] = useState([]);
+  const height = 260;
 
-  textValues.forEach((value) => {
-    String(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9\s'-]/g, ' ')
-      .split(/\s+/)
-      .map((word) => word.trim())
-      .filter((word) => word.length > 2)
-      .forEach((word) => {
-        counts.set(word, (counts.get(word) || 0) + 1);
+  const words = useMemo(() => {
+    const counts = new Map();
+
+    textValues.forEach((value) => {
+      String(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s'-]/g, ' ')
+        .split(/\s+/)
+        .map((word) => word.trim())
+        .filter((word) => word.length > 2)
+        .forEach((word) => {
+          counts.set(word, (counts.get(word) || 0) + 1);
+        });
+    });
+
+    return [...counts.entries()]
+      .map(([text, value]) => ({ text, value }))
+      .sort((a, b) => b.value - a.value || a.text.localeCompare(b.text))
+      .slice(0, 80);
+  }, [textValues]);
+
+  const canLayout = words.length > 0 && width >= 120;
+
+  useEffect(() => {
+    if (!wrapperRef.current) {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = Math.floor(entries[0]?.contentRect?.width || 0);
+      setWidth((previous) => (previous === nextWidth ? previous : nextWidth));
+    });
+
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!canLayout) {
+      return undefined;
+    }
+
+    const max = Math.max(...words.map((item) => item.value), 1);
+    const min = Math.min(...words.map((item) => item.value), max);
+    const sizeRange = Math.max(max - min, 1);
+
+    const seededRotate = (wordText) => {
+      let hash = 0;
+      for (let index = 0; index < wordText.length; index += 1) {
+        hash = (hash << 5) - hash + wordText.charCodeAt(index);
+        hash |= 0;
+      }
+      return Math.abs(hash) % 4 === 0 ? 90 : 0;
+    };
+
+    const layout = cloud()
+      .size([width, height])
+      .words(
+        words.map((item) => ({
+          text: item.text,
+          value: item.value,
+          size: 14 + ((item.value - min) / sizeRange) * 28,
+          rotate: seededRotate(item.text)
+        }))
+      )
+      .padding(2)
+      .rotate((item) => item.rotate)
+      .font('sans-serif')
+      .fontWeight(600)
+      .fontSize((item) => item.size)
+      .on('end', (placedWords) => {
+        setLayoutWords(placedWords);
       });
-  });
 
-  const words = [...counts.entries()]
-    .map(([word, count]) => ({ word, count }))
-    .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))
-    .slice(0, 60);
+    layout.start();
+    return () => layout.stop();
+  }, [canLayout, height, width, words]);
 
   if (!words.length) {
-    return <EmptyChart message="No textual responses available for this range." />;
+    return <EmptyChart />;
   }
 
-  const max = Math.max(...words.map((item) => item.count));
-
   return (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2, minHeight: 260 }}>
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-        {words.map((item) => {
-          const ratio = max ? item.count / max : 0;
-          const fontSize = 12 + ratio * 26;
-          const opacity = 0.45 + ratio * 0.55;
+    <Box
+      ref={wrapperRef}
+      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1, minHeight: 260 }}
+    >
+      <svg width="100%" height={height} viewBox={`0 0 ${Math.max(width, 1)} ${height}`}>
+        <g transform={`translate(${Math.max(width, 1) / 2}, ${height / 2})`}>
+          {(canLayout ? layoutWords : []).map((word) => {
+            const ratio = Math.max(word.value, 1) / Math.max(words[0]?.value || 1, 1);
+            const opacity = 0.45 + ratio * 0.55;
 
-          return (
-            <Typography
-              key={item.word}
-              component="span"
-              sx={{
-                fontSize,
-                lineHeight: 1.15,
-                fontWeight: 500,
-                opacity,
-                color: 'primary.main'
-              }}
-            >
-              {item.word}
-            </Typography>
-          );
-        })}
-      </Stack>
+            return (
+              <text
+                key={word.text}
+                transform={`translate(${word.x}, ${word.y}) rotate(${word.rotate})`}
+                textAnchor="middle"
+                style={{
+                  fontSize: `${word.size}px`,
+                  fontWeight: 600,
+                  fontFamily: 'sans-serif',
+                  fill: '#4f46e5',
+                  opacity
+                }}
+              >
+                {word.text}
+              </text>
+            );
+          })}
+        </g>
+      </svg>
     </Box>
   );
 }
 
 export function HeatMapChart({ rowLabels, columnLabels, points }) {
   if (!rowLabels.length || !columnLabels.length) {
-    return <EmptyChart message="No overlapping responses to compare yet." />;
+    return <EmptyChart />;
   }
 
   const maxCount = Math.max(...points.map((item) => item.count), 0);
@@ -181,11 +249,18 @@ export function HeatMapChart({ rowLabels, columnLabels, points }) {
           borderColor: 'divider'
         }}
       >
-        <Box sx={{ p: 1, borderRight: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }} />
+        <Box
+          sx={{ p: 1, borderRight: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}
+        />
         {columnLabels.map((label) => (
           <Box
             key={`col-${label}`}
-            sx={{ p: 1, borderRight: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}
+            sx={{
+              p: 1,
+              borderRight: '1px solid',
+              borderBottom: '1px solid',
+              borderColor: 'divider'
+            }}
           >
             <Typography variant="caption" fontWeight={600}>
               {label}
@@ -195,7 +270,12 @@ export function HeatMapChart({ rowLabels, columnLabels, points }) {
         {rowLabels.map((rowLabel) => (
           <Fragment key={`row-${rowLabel}`}>
             <Box
-              sx={{ p: 1, borderRight: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}
+              sx={{
+                p: 1,
+                borderRight: '1px solid',
+                borderBottom: '1px solid',
+                borderColor: 'divider'
+              }}
             >
               <Typography variant="caption" fontWeight={600}>
                 {rowLabel}
@@ -233,7 +313,7 @@ export function HeatMapChart({ rowLabels, columnLabels, points }) {
 
 export function ScatterComparisonChart({ points }) {
   if (!points.length) {
-    return <EmptyChart message="No respondents answered both questions in this range." />;
+    return <EmptyChart />;
   }
 
   return (
@@ -251,10 +331,10 @@ export function ScatterComparisonChart({ points }) {
   );
 }
 
-export function StackedHistogramChart({ values, seriesByValue }) {
+export function StackedHistogramChart({ values }) {
   const allValues = values.map((item) => item.value);
   if (!allValues.length) {
-    return <EmptyChart message="No overlapping responses to compare yet." />;
+    return <EmptyChart />;
   }
 
   const bins = buildHistogramBins(allValues).map((bin) => ({ ...bin }));
@@ -287,12 +367,6 @@ export function StackedHistogramChart({ values, seriesByValue }) {
           ))}
         </BarChart>
       </ResponsiveContainer>
-      {seriesByValue.length > 0 && (
-        <Typography variant="caption" color="text.secondary">
-          Categories: {seriesByValue.join(', ')}
-        </Typography>
-      )}
     </Box>
   );
 }
-

@@ -65,9 +65,13 @@ Questions with textual answers cannot be compared, so only multiple-choice and n
 
 ## Implementation guide
 
+Implement the word cloud component with [d3-cloud](https://github.com/jasondavies/d3-cloud).
+
 Extract reusable components.
 
 Ensure that all components are fully functional.
 
 Use actual data from the database to populate dropdowns and charts.
 Do not use hardcoded or mocked data.
+
+Do not add any instructions or messages to the user interface that are not specified in the above sections.
