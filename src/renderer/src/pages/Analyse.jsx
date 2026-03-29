@@ -482,6 +482,17 @@ export default function Analyse() {
     });
   }, [comparisonBlocks]);
 
+  const buildQuestionBlockSelectLabel = (block) => {
+    const selectedSurveyNames = MOCK_SURVEYS.filter((survey) =>
+      block.selectedSurveyIds.includes(survey.id)
+    ).map((survey) => survey.name);
+
+    const selectedSurveyText =
+      selectedSurveyNames.length > 0 ? selectedSurveyNames.join(', ') : 'No surveys selected';
+
+    return `${block.questionText} (Selected surveys: ${selectedSurveyText})`;
+  };
+
   return (
     <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100%' }}>
       <Stack spacing={2} sx={{ maxWidth: 1100, mx: 'auto' }}>
@@ -876,7 +887,7 @@ export default function Analyse() {
               >
                 {questionBlocks.map((block) => (
                   <MenuItem key={block.id} value={block.id}>
-                    {block.questionText}
+                    {buildQuestionBlockSelectLabel(block)}
                   </MenuItem>
                 ))}
               </Select>
@@ -898,7 +909,7 @@ export default function Analyse() {
               >
                 {questionBlocks.map((block) => (
                   <MenuItem key={block.id} value={block.id} disabled={block.id === compareBlockOneId}>
-                    {block.questionText}
+                    {buildQuestionBlockSelectLabel(block)}
                   </MenuItem>
                 ))}
               </Select>
