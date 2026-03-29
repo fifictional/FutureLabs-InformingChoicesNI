@@ -10,6 +10,7 @@ import * as formService from './db/services/formService';
 import * as questionService from './db/services/questionService';
 import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
+import * as statisticOverviewService from './db/services/statisticOverviewService';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
 import {
@@ -175,6 +176,19 @@ ipcMain.handle('responses:listBySubmission', (_event, submissionId) =>
 );
 ipcMain.handle('responses:upsert', (_event, data) => responseService.upsertResponse(data));
 ipcMain.handle('responses:delete', (_event, id) => responseService.deleteResponse(id));
+
+ipcMain.handle('statistics:listConfigurableMetrics', () =>
+  statisticOverviewService.listConfigurableOverviewMetrics()
+);
+ipcMain.handle('statistics:listSelectableSurveyQuestions', (_event, metricName) =>
+  statisticOverviewService.listSelectableSurveyQuestions(metricName)
+);
+ipcMain.handle('statistics:setMetricQuestion', (_event, metricName, questionId) =>
+  statisticOverviewService.setOverviewMetricQuestion(metricName, questionId)
+);
+ipcMain.handle('statistics:getDashboardOverviewData', () =>
+  statisticOverviewService.getDashboardOverviewData()
+);
 
 // google auth
 ipcMain.handle('googleAuth:isUserAuthenticated', () => isUserAuthenticated());
