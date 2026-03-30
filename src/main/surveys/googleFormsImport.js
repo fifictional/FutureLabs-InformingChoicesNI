@@ -95,6 +95,11 @@ function mapGoogleQuestionTypeToAnswerType(questionDef) {
   return 'text';
 }
 
+function getUserReferenceIdFromAnswer(answer) {
+  const text = pickText(extractAnswerValue(answer)).trim();
+  return text || null;
+}
+
 function answerToDbValues(answer, answerType) {
   if (!answer) return { valueText: '', valueNumber: null, valueChoice: null };
 
@@ -148,9 +153,10 @@ async function uniqueFormName(base) {
 
 export async function importGoogleForms(
   formIds,
-  { eventName, eventDescription, formNameOverride } = {}
+  { eventName, eventDescription, formNameOverride, userReferenceQuestionId } = {}
 ) {
   if (!Array.isArray(formIds) || formIds.length === 0) throw new Error('No forms selected');
+  const referenceQuestionId = pickText(userReferenceQuestionId).trim();
   const ev = await ensureEventByName(eventName, eventDescription);
 
   const createdFormIds = [];
@@ -206,9 +212,14 @@ export async function importGoogleForms(
       questionRows.push({
         ...questionRow,
         googleQuestionId: def.questionId,
-        answerType
+        answerType,
+        questionIndex: i
       });
     }
+
+    const referenceQuestion = referenceQuestionId
+      ? questionRows.find((q) => q.googleQuestionId === referenceQuestionId) || null
+      : null;
 
     // import responses (best-effort)
     const responseData = await getGoogleFormResponsesById(formId);
@@ -221,15 +232,22 @@ export async function importGoogleForms(
       if (!externalId) continue;
       if (existingByExternalId.has(externalId)) continue;
 
-      const [sub] = await submissionService.createSubmission({
-        formId: dbForm.id,
-        submittedAt: parseSubmittedAt(r),
-        externalId
-      });
-
       const answersObj = r?.answers || {};
       const answerEntries = Object.entries(answersObj);
       const answerValuesByIndex = answerEntries.map(([, value]) => value);
+      const userReferenceAnswer = referenceQuestion
+        ? referenceQuestion.googleQuestionId
+          ? answersObj[referenceQuestion.googleQuestionId] ?? null
+          : answerValuesByIndex[referenceQuestion.questionIndex] ?? null
+        : null;
+      const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
+
+      const [sub] = await submissionService.createSubmission({
+        formId: dbForm.id,
+        userReferenceId,
+        submittedAt: parseSubmittedAt(r),
+        externalId
+      });
 
       for (let i = 0; i < questionRows.length; i++) {
         const question = questionRows[i];

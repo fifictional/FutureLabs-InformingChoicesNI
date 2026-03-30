@@ -72,6 +72,20 @@ function mapGoogleQuestionTypeToAnswerType(questionDef) {
   return 'text';
 }
 
+function isReferenceIdQuestion(text) {
+  const normalized = pickText(text).toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!normalized) return false;
+  return (
+    /(reference|ref)\s*(id|identifier)/.test(normalized) ||
+    /client\s*(reference|ref|id)/.test(normalized)
+  );
+}
+
+function getUserReferenceIdFromAnswer(answer) {
+  const text = pickText(extractAnswerValue(answer)).trim();
+  return text || null;
+}
+
 function extractAnswerValue(answer) {
   if (!answer) return '';
   if (answer.textAnswers?.answers?.length) return pickText(answer.textAnswers.answers[0]?.value);
@@ -270,25 +284,35 @@ export async function refreshSchemaAndResponses(formId) {
       questionRows.push({
         ...questionRow,
         googleQuestionId: def.questionId,
-        answerType
+        answerType,
+        questionIndex: questionRows.length
       });
     }
+
+    const referenceQuestion = questionRows.find((q) => isReferenceIdQuestion(q.text));
 
     for (const response of googleResponses?.responses || []) {
       const externalResponseId = pickText(response?.responseId || '').trim();
       if (!externalResponseId) continue;
 
+      const answersObj = response?.answers || {};
+      const answerValuesByIndex = Object.values(answersObj);
+      const userReferenceAnswer = referenceQuestion
+        ? referenceQuestion.googleQuestionId
+          ? answersObj[referenceQuestion.googleQuestionId] || null
+          : answerValuesByIndex[referenceQuestion.questionIndex] || null
+        : null;
+      const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
+
       const [submission] = await db
         .insert(submissions)
         .values({
           formId,
+          userReferenceId,
           submittedAt: parseSubmittedAt(response),
           externalId: externalResponseId
         })
         .returning();
-
-      const answersObj = response?.answers || {};
-      const answerValuesByIndex = Object.values(answersObj);
 
       for (let i = 0; i < questionRows.length; i++) {
         const question = questionRows[i];

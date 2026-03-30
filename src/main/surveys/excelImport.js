@@ -182,6 +182,14 @@ function inferQuestionDefinition(rowsForForm, colIdx, fallbackTitle) {
   };
 }
 
+function formatPreviewCellValue(cell) {
+  if (cell == null) return '';
+  if (cell instanceof Date) {
+    return Number.isNaN(cell.getTime()) ? '' : cell.toISOString();
+  }
+  return String(cell);
+}
+
 export function parseExcelImport(bufferLike) {
   let buffer;
   if (!bufferLike) throw new Error('No file data');
@@ -206,7 +214,11 @@ export function parseExcelImport(bufferLike) {
       questionIndices.push(i);
   }
   const headers = questionIndices.map((i) => headerRow[i] || `Column ${i + 1}`);
-  const { metadataSheetName } = extractQuestionMetadataFromWorkbook(wb, headerRow, questionIndices);
+  const { metadataByHeader, metadataSheetName } = extractQuestionMetadataFromWorkbook(
+    wb,
+    headerRow,
+    questionIndices
+  );
   let suggestedFormName = '';
   let suggestedEventName = '';
   if (rows.length > 1) {
@@ -219,6 +231,39 @@ export function parseExcelImport(bufferLike) {
     }
   }
   const dataRows = rows.slice(1);
+  const questionDefinitions = buildQuestionDefinitions(
+    dataRows,
+    questionIndices,
+    headerRow,
+    metadataByHeader
+  );
+
+  const previewColumns = headerRow.map((header, colIdx) => ({
+    field: `c_${colIdx}`,
+    headerName: header || `Column ${colIdx + 1}`,
+    width: 180
+  }));
+  const previewLimit = 200;
+  const previewRows = dataRows.slice(0, previewLimit).map((row, idx) => {
+    const out = { id: idx + 1 };
+    for (let colIdx = 0; colIdx < headerRow.length; colIdx++) {
+      out[`c_${colIdx}`] = formatPreviewCellValue(row[colIdx]);
+    }
+    return out;
+  });
+
+  const questionDefinitionsPreview = questionDefinitions.map((qDef, idx) => {
+    const hasMetadata = Boolean(metadataByHeader.get(qDef.text.toLowerCase()));
+    return {
+      id: idx + 1,
+      questionIndex: idx,
+      question: qDef.text,
+      answerType: qDef.answerType,
+      choiceCount: Array.isArray(qDef.options) ? qDef.options.length : 0,
+      choices: Array.isArray(qDef.options) ? qDef.options.join(' | ') : '',
+      source: hasMetadata ? 'metadata' : 'inferred'
+    };
+  });
 
   return {
     suggestedFormName,
@@ -227,11 +272,19 @@ export function parseExcelImport(bufferLike) {
     rowCount: dataRows.length,
     hasPerRowEvent: eventCol >= 0,
     questionMetadataSheet: metadataSheetName,
-    hasQuestionMetadata: Boolean(metadataSheetName)
+    hasQuestionMetadata: Boolean(metadataSheetName),
+    previewColumns,
+    previewRows,
+    previewLimit,
+    previewTruncated: dataRows.length > previewLimit,
+    questionDefinitions: questionDefinitionsPreview
   };
 }
 
-export async function commitExcelImport(bufferLike, { formName, eventName, eventDescription }) {
+export async function commitExcelImport(
+  bufferLike,
+  { formName, eventName, eventDescription, userReferenceQuestionIndex } = {}
+) {
   let buffer;
   if (!bufferLike) throw new Error('No file data');
   if (Buffer.isBuffer(bufferLike)) buffer = bufferLike;
@@ -263,9 +316,19 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
 
   const dialogForm = (formName || '').trim();
   const dialogEvent = (eventName || '').trim();
+  const referenceQuestionIndex =
+    typeof userReferenceQuestionIndex === 'number' && Number.isInteger(userReferenceQuestionIndex)
+      ? userReferenceQuestionIndex
+      : null;
   if (!dialogForm) throw new Error('Form name is required');
   if (eventCol < 0 && !dialogEvent) throw new Error('Event name is required');
   if (questionIndices.length === 0) throw new Error('No question columns found');
+  if (
+    referenceQuestionIndex != null &&
+    (referenceQuestionIndex < 0 || referenceQuestionIndex >= questionIndices.length)
+  ) {
+    throw new Error('Selected user reference ID question is invalid');
+  }
 
   async function importForRows(targetEventName, rowsForForm, nameForForm) {
     const nameTrim = (targetEventName || '').trim();
@@ -327,8 +390,14 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
       qs.push({
         ...questionRow,
         answerType: qDef.answerType,
-        options: qDef.options
+        options: qDef.options,
+        headerIndex: i
       });
+    }
+
+    const referenceQuestion = referenceQuestionIndex == null ? null : qs[referenceQuestionIndex] || null;
+    if (referenceQuestion && referenceQuestion.answerType !== 'text') {
+      throw new Error('Selected user reference ID question must be a text question');
     }
 
     let rowIdx = 0;
@@ -349,6 +418,10 @@ export async function commitExcelImport(bufferLike, { formName, eventName, event
 
       const [sub] = await submissionService.createSubmission({
         formId: form.id,
+        userReferenceId:
+          referenceQuestion == null
+            ? null
+            : toTrimmedString(row[questionIndices[referenceQuestion.headerIndex]]),
         submittedAt,
         externalId: `excel-row-${form.id}-${rowIdx}`
       });
