@@ -29,7 +29,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import { Edit, Star, StarHalf, StarBorder } from '@mui/icons-material';
+import { Edit, Refresh, Star, StarHalf, StarBorder } from '@mui/icons-material';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useMemo, useState } from 'react';
@@ -52,14 +52,52 @@ const METRIC_LABELS = {
 
 const REQUIREMENT_LABELS = {
   number: 'Requires a numeric question.',
+  choice: 'Requires a choice question. Age bands come from the question choices.',
   yes_no_choice: 'Requires a choice question that includes Yes and No options.',
   choice_or_text: 'Requires a choice or text question.'
 };
 
 const GEO_COORDINATES = {
   belfast: { lat: 54.5973, lng: -5.9301 },
+  'east belfast': { lat: 54.595, lng: -5.86 },
+  'north belfast': { lat: 54.63, lng: -5.95 },
+  'south belfast and mid down': { lat: 54.45, lng: -5.9 },
+  'west belfast': { lat: 54.6, lng: -5.99 },
   derry: { lat: 54.9966, lng: -7.3086 },
   londonderry: { lat: 54.9966, lng: -7.3086 },
+  'east derry/londonderry': { lat: 55.02, lng: -6.95 },
+  foyle: { lat: 54.99, lng: -7.32 },
+  antrim: { lat: 54.7192, lng: -6.2073 },
+  'north antrim': { lat: 55.08, lng: -6.35 },
+  'east antrim': { lat: 54.85, lng: -5.85 },
+  'south antrim': { lat: 54.67, lng: -6.13 },
+  'mid and east antrim': { lat: 54.85, lng: -5.85 },
+  carrickfergus: { lat: 54.7158, lng: -5.8058 },
+  larne: { lat: 54.85, lng: -5.8167 },
+  ballymena: { lat: 54.8639, lng: -6.2767 },
+  'antrim and newtownabbey': { lat: 54.72, lng: -6.03 },
+  newtownabbey: { lat: 54.66, lng: -5.9 },
+  'ards and north down': { lat: 54.58, lng: -5.67 },
+  ards: { lat: 54.58, lng: -5.67 },
+  'north down': { lat: 54.58, lng: -5.67 },
+  strangford: { lat: 54.38, lng: -5.58 },
+  'lagan valley': { lat: 54.5, lng: -6.02 },
+  fermanagh: { lat: 54.35, lng: -7.65 },
+  'fermanagh and south tyrone': { lat: 54.41, lng: -7.17 },
+  'fermanagh and omagh': { lat: 54.47, lng: -7.72 },
+  tyrone: { lat: 54.65, lng: -7.35 },
+  'west tyrone': { lat: 54.72, lng: -7.56 },
+  'mid ulster': { lat: 54.65, lng: -6.75 },
+  'causeway coast and glens': { lat: 55.05, lng: -6.65 },
+  down: { lat: 54.33, lng: -5.7 },
+  'south down': { lat: 54.23, lng: -5.9 },
+  'newry mourne and down': { lat: 54.2, lng: -6.25 },
+  'newry and armagh': { lat: 54.27, lng: -6.38 },
+  'armagh city banbridge and craigavon': { lat: 54.4, lng: -6.4 },
+  banbridge: { lat: 54.35, lng: -6.28 },
+  'upper bann': { lat: 54.4, lng: -6.45 },
+  'derry city and strabane': { lat: 54.98, lng: -7.32 },
+  strabane: { lat: 54.82, lng: -7.47 },
   armagh: { lat: 54.3503, lng: -6.6528 },
   newry: { lat: 54.1753, lng: -6.3402 },
   lisburn: { lat: 54.5162, lng: -6.058 },
@@ -126,6 +164,7 @@ export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   const [configOpen, setConfigOpen] = useState(false);
   const [configMetricName, setConfigMetricName] = useState('');
@@ -160,6 +199,19 @@ export default function Dashboard() {
       setDashboardError(error?.message || 'Failed to load dashboard data.');
     } finally {
       setLoadingDashboard(false);
+    }
+  }
+
+  async function refreshAllSurveysAndDashboard() {
+    setRefreshingAll(true);
+    setDashboardError('');
+    try {
+      await window.api.forms.list();
+      await loadDashboardData();
+    } catch (error) {
+      setDashboardError(error?.message || 'Failed to refresh surveys and dashboard data.');
+    } finally {
+      setRefreshingAll(false);
     }
   }
 
@@ -223,7 +275,12 @@ export default function Dashboard() {
   const totalSubmissions = Number(dashboardData?.totalFeedbackReceived || 0);
 
   useEffect(() => {
-    loadDashboardData();
+      const loadDataAndRefresh = async () => {
+          await loadDashboardData();
+          await refreshAllSurveysAndDashboard();
+      };
+
+        loadDataAndRefresh();
   }, []);
 
   const avgMetric = dashboardData?.metricData?.[CONFIGURABLE_METRIC_NAMES.avgSatisfaction] || {};
@@ -258,7 +315,11 @@ export default function Dashboard() {
 
   const geoData = (Array.isArray(geoMetric.categories) ? geoMetric.categories : [])
     .map((entry) => {
-      const key = String(entry.name || '').trim().toLowerCase();
+      const key = String(entry.name || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/\./g, '');
       const coords = GEO_COORDINATES[key];
       if (!coords) return null;
       return {
@@ -365,6 +426,17 @@ export default function Dashboard() {
     <>  
     <Box css={dashboardBackgroundStyle}>
       <Box css={dashboardContainerStyle}>
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={refreshingAll ? <CircularProgress size={14} /> : <Refresh />}
+            onClick={refreshAllSurveysAndDashboard}
+            disabled={refreshingAll || loadingDashboard}
+          >
+            Refresh All Surveys
+          </Button>
+        </Box>
 
         {dashboardError ? <Alert severity="error" sx={{ mb: 2 }}>{dashboardError}</Alert> : null}
 

@@ -15,6 +15,7 @@ import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
 import {
   createGoogleForm,
+  getGoogleFormById,
   openGoogleFormInBrowserByBaseLink,
   openGoogleFormInBrowserById
 } from './common/google-forms/google-forms.js';
@@ -206,13 +207,35 @@ ipcMain.handle('googleForms:openInBrowserById', (_event, formId) =>
 ipcMain.handle('googleForms:openInBrowserByBaseLink', (_event, baseLink) =>
   openGoogleFormInBrowserByBaseLink(baseLink)
 );
+ipcMain.handle('googleForms:listReferenceQuestions', async (_event, formId) => {
+  const formRes = await getGoogleFormById(formId);
+  const form = formRes?.data || formRes;
+  const items = Array.isArray(form?.items) ? form.items : [];
+
+  return items
+    .map((item) => {
+      const q = item?.questionItem?.question;
+      if (!q?.textQuestion || !q?.questionId) return null;
+      const title = String(item?.title || q.questionId).trim();
+      if (!title) return null;
+
+      return {
+        id: String(q.questionId),
+        title,
+        type: q.textQuestion?.paragraph ? 'paragraph' : 'text'
+      };
+    })
+    .filter(Boolean);
+});
 ipcMain.handle('googleForms:importSelected', async (_event, payload) => {
   try {
-    const { formIds, eventName, eventDescription, formNameOverride } = payload || {};
+    const { formIds, eventName, eventDescription, formNameOverride, userReferenceQuestionId } =
+      payload || {};
     const result = await importGoogleForms(formIds, {
       eventName,
       eventDescription,
-      formNameOverride
+      formNameOverride,
+      userReferenceQuestionId
     });
     return { ok: true, ...result };
   } catch (err) {
@@ -230,8 +253,14 @@ ipcMain.handle('surveys:parseExcelImport', (_event, buffer) => {
 });
 ipcMain.handle('surveys:commitExcelImport', async (_event, payload) => {
   try {
-    const { buffer, formName, eventName, eventDescription } = payload || {};
-    const result = await commitExcelImport(buffer, { formName, eventName, eventDescription });
+    const { buffer, formName, eventName, eventDescription, userReferenceQuestionIndex } =
+      payload || {};
+    const result = await commitExcelImport(buffer, {
+      formName,
+      eventName,
+      eventDescription,
+      userReferenceQuestionIndex
+    });
     return { ok: true, ...result };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };

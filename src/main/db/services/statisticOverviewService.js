@@ -1,6 +1,13 @@
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { forms, questionChoice, questions, responses, statisticOverviews, submissions } from '../schema';
+import {
+  forms,
+  questionChoice,
+  questions,
+  responses,
+  statisticOverviews,
+  submissions
+} from '../schema';
 
 const CONFIGURABLE_METRICS = [
   {
@@ -19,7 +26,7 @@ const CONFIGURABLE_METRICS = [
     name: 'age_distribution',
     defaultQuestion: 'What is your age?',
     description: 'Age distribution',
-    requirement: 'number'
+    requirement: 'choice'
   },
   {
     name: 'referral_sources',
@@ -36,7 +43,9 @@ const CONFIGURABLE_METRICS = [
 ];
 
 function normalizeText(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase();
 }
 
 function parseNumber(valueText, valueNumber) {
@@ -48,6 +57,10 @@ function parseNumber(valueText, valueNumber) {
 function questionMatchesRequirement(question, requirement, yesNoChoiceQuestionIds) {
   if (requirement === 'number') {
     return question.answerType === 'number';
+  }
+
+  if (requirement === 'choice') {
+    return question.answerType === 'choice';
   }
 
   if (requirement === 'yes_no_choice') {
@@ -106,6 +119,36 @@ async function ensureMetricRows() {
   }
 }
 
+async function findReplacementQuestionByText(metricName, questionText) {
+  const metric = CONFIGURABLE_METRICS.find((m) => m.name === metricName);
+  if (!metric) return null;
+
+  const normalizedTarget = normalizeText(questionText);
+  if (!normalizedTarget) return null;
+
+  const db = getDb();
+  const matches = await db
+    .select({
+      id: questions.id,
+      text: questions.text,
+      answerType: questions.answerType,
+      formId: questions.formId
+    })
+    .from(questions)
+    .where(sql`lower(trim(${questions.text})) = ${normalizedTarget}`);
+
+  if (!Array.isArray(matches) || matches.length === 0) return null;
+
+  const yesNoChoiceQuestionIds =
+    metric.requirement === 'yes_no_choice' ? await getYesNoChoiceQuestionIds() : new Set();
+
+  const eligible = matches.find((q) =>
+    questionMatchesRequirement(q, metric.requirement, yesNoChoiceQuestionIds)
+  );
+
+  return eligible || null;
+}
+
 export async function listConfigurableOverviewMetrics() {
   await ensureMetricRows();
   const db = getDb();
@@ -124,6 +167,43 @@ export async function listConfigurableOverviewMetrics() {
     .from(statisticOverviews)
     .leftJoin(questions, eq(questions.id, statisticOverviews.questionId))
     .leftJoin(forms, eq(forms.id, questions.formId));
+
+  for (const row of rows) {
+    if (!row.questionId || !row.selectedQuestionText) continue;
+    if (normalizeText(row.defaultQuestion) === normalizeText(row.selectedQuestionText)) continue;
+
+    await db
+      .update(statisticOverviews)
+      .set({ defaultQuestion: row.selectedQuestionText })
+      .where(eq(statisticOverviews.id, row.id));
+
+    row.defaultQuestion = row.selectedQuestionText;
+  }
+
+  for (const row of rows) {
+    if (row.questionId && row.selectedQuestionText) continue;
+
+    const replacement = await findReplacementQuestionByText(row.name, row.defaultQuestion);
+    if (!replacement) continue;
+
+    await db
+      .update(statisticOverviews)
+      .set({ questionId: replacement.id })
+      .where(eq(statisticOverviews.id, row.id));
+
+    row.questionId = replacement.id;
+    row.selectedQuestionText = replacement.text;
+    row.selectedQuestionAnswerType = replacement.answerType;
+
+    const replacementForm = await db
+      .select({ id: forms.id, name: forms.name })
+      .from(forms)
+      .where(eq(forms.id, replacement.formId))
+      .get();
+
+    row.selectedFormId = replacement.formId;
+    row.selectedFormName = replacementForm?.name || null;
+  }
 
   const byName = new Map(rows.map((r) => [r.name, r]));
   return CONFIGURABLE_METRICS.map((metric) => ({
@@ -155,7 +235,12 @@ export async function listSelectableSurveyQuestions(metricName) {
     .orderBy(forms.name);
 
   const allQuestions = await db
-    .select({ id: questions.id, formId: questions.formId, text: questions.text, answerType: questions.answerType })
+    .select({
+      id: questions.id,
+      formId: questions.formId,
+      text: questions.text,
+      answerType: questions.answerType
+    })
     .from(questions);
 
   const yesNoChoiceQuestionIds =
@@ -211,6 +296,10 @@ export async function setOverviewMetricQuestion(metricName, questionId) {
     throw new Error('This metric requires a numeric question');
   }
 
+  if (metric.requirement === 'choice' && question.answerType !== 'choice') {
+    throw new Error('This metric requires a choice question');
+  }
+
   if (metric.requirement === 'yes_no_choice') {
     if (question.answerType !== 'choice') {
       throw new Error('This metric requires a choice question with Yes/No options');
@@ -236,7 +325,7 @@ export async function setOverviewMetricQuestion(metricName, questionId) {
 
   await db
     .update(statisticOverviews)
-    .set({ questionId: question.id })
+    .set({ questionId: question.id, defaultQuestion: question.text })
     .where(eq(statisticOverviews.name, metric.name));
 
   return {
@@ -252,7 +341,10 @@ export async function getDashboardOverviewData() {
 
   const db = getDb();
 
-  const totalFeedbackRow = await db.select({ count: db.$count(submissions) }).from(submissions).get();
+  const totalFeedbackRow = await db
+    .select({ count: db.$count(submissions) })
+    .from(submissions)
+    .get();
   const totalFeedbackReceived = Number(totalFeedbackRow?.count || 0);
 
   const yearlyRows = await db
@@ -316,7 +408,8 @@ export async function getDashboardOverviewData() {
       const values = metricResponses
         .map((r) => parseNumber(r.valueText, r.valueNumber))
         .filter((v) => v !== null);
-      const average = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
+      const average =
+        values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
       metricData[metric.name] = {
         configured: true,
         questionText: metric.selectedQuestionText,
@@ -347,29 +440,52 @@ export async function getDashboardOverviewData() {
     }
 
     if (metric.name === 'age_distribution') {
-      const values = metricResponses
-        .map((r) => parseNumber(r.valueText, r.valueNumber))
-        .filter((v) => v !== null);
+      const choiceRows = await db
+        .select({ questionId: questionChoice.questionId, choiceText: questionChoice.choiceText })
+        .from(questionChoice)
+        .where(inArray(questionChoice.questionId, matchingIds));
 
-      const buckets = {
-        '0-18': 0,
-        '19-35': 0,
-        '36-50': 0,
-        '51+': 0
-      };
-
-      for (const age of values) {
-        if (age <= 18) buckets['0-18'] += 1;
-        else if (age <= 35) buckets['19-35'] += 1;
-        else if (age <= 50) buckets['36-50'] += 1;
-        else buckets['51+'] += 1;
+      const labelByNormalized = new Map();
+      const order = [];
+      for (const row of choiceRows) {
+        const label = String(row.choiceText || '').trim();
+        if (!label) continue;
+        const key = normalizeText(label);
+        if (!labelByNormalized.has(key)) {
+          labelByNormalized.set(key, label);
+          order.push(key);
+        }
       }
+
+      const countsByKey = new Map();
+      for (const row of metricResponses) {
+        const raw = String(row.valueChoice || row.valueText || '').trim();
+        if (!raw) continue;
+        const selectedValues = raw
+          .split('|')
+          .map((part) => part.trim())
+          .filter(Boolean);
+
+        for (const selected of selectedValues) {
+          const key = normalizeText(selected);
+          if (!labelByNormalized.has(key)) {
+            labelByNormalized.set(key, selected);
+            order.push(key);
+          }
+          countsByKey.set(key, (countsByKey.get(key) || 0) + 1);
+        }
+      }
+
+      const bands = order.map((key) => ({
+        band: labelByNormalized.get(key),
+        count: countsByKey.get(key) || 0
+      }));
 
       metricData[metric.name] = {
         configured: true,
         questionText: metric.selectedQuestionText,
-        valuesFound: values.length,
-        bands: Object.entries(buckets).map(([band, count]) => ({ band, count }))
+        valuesFound: bands.reduce((sum, item) => sum + item.count, 0),
+        bands
       };
       continue;
     }

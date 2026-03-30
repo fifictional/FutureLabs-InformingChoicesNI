@@ -207,7 +207,16 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                     <IconButton color="primary" onClick={() => setRefresh(prev => !prev)} disabled={loading}>
                         <RefreshIcon />
                     </IconButton>
-                    <Button css={css`margin-left: 0.5em;`} variant="contained" color="primary" onClick={() => onSubmit(selectedFormIds)} disabled={selectedFormIds.length === 0 || loading}>
+                    <Button
+                        css={css`margin-left: 0.5em;`}
+                        variant="contained"
+                        color="primary"
+                        onClick={() => {
+                            const selectedForms = forms.filter(form => selectedFormIds.includes(form.id));
+                            onSubmit(selectedFormIds, selectedForms);
+                        }}
+                        disabled={selectedFormIds.length === 0 || loading}
+                    >
                         {alternateSubtitle || "Import Selected"}
                     </Button>
                 </Stack>

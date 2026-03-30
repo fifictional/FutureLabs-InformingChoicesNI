@@ -68,6 +68,8 @@ const api = {
     openInBrowserById: (formId) => ipcRenderer.invoke('googleForms:openInBrowserById', formId),
     openInBrowserByBaseLink: (baseLink) =>
       ipcRenderer.invoke('googleForms:openInBrowserByBaseLink', baseLink),
+    listReferenceQuestions: (formId) =>
+      ipcRenderer.invoke('googleForms:listReferenceQuestions', formId),
     importSelected: (payload) => ipcRenderer.invoke('googleForms:importSelected', payload)
   },
   surveys: {
