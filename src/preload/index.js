@@ -34,10 +34,6 @@ const api = {
     update: (id, data) => ipcRenderer.invoke('forms:update', id, data),
     refreshSchemaAndResponses: (id) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', id)
   },
-  refresh: {
-    form: (formId) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', formId),
-    allForms: () => ipcRenderer.invoke('forms:refreshAllGoogleForms')
-  },
   questions: {
     listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),
     listChoicesByQuestion: (questionId) =>
@@ -57,6 +53,14 @@ const api = {
     upsert: (data) => ipcRenderer.invoke('responses:upsert', data),
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
   },
+  statistics: {
+    listConfigurableMetrics: () => ipcRenderer.invoke('statistics:listConfigurableMetrics'),
+    listSelectableSurveyQuestions: (metricName) =>
+      ipcRenderer.invoke('statistics:listSelectableSurveyQuestions', metricName),
+    setMetricQuestion: (metricName, questionId) =>
+      ipcRenderer.invoke('statistics:setMetricQuestion', metricName, questionId),
+    getDashboardOverviewData: () => ipcRenderer.invoke('statistics:getDashboardOverviewData')
+  },
   googleForms: {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
     create: (title, document_title) =>
@@ -64,6 +68,8 @@ const api = {
     openInBrowserById: (formId) => ipcRenderer.invoke('googleForms:openInBrowserById', formId),
     openInBrowserByBaseLink: (baseLink) =>
       ipcRenderer.invoke('googleForms:openInBrowserByBaseLink', baseLink),
+    listReferenceQuestions: (formId) =>
+      ipcRenderer.invoke('googleForms:listReferenceQuestions', formId),
     importSelected: (payload) => ipcRenderer.invoke('googleForms:importSelected', payload)
   },
   surveys: {

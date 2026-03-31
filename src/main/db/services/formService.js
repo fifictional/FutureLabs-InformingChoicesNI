@@ -4,11 +4,27 @@ import {
 } from '../../common/google-forms/google-forms';
 import { getDb } from '../client';
 import { events, forms, questionChoice, questions, responses, submissions } from '../schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 function serializeSchemaValue(schemaValue) {
   if (schemaValue == null) return null;
   return typeof schemaValue === 'string' ? schemaValue : JSON.stringify(schemaValue);
+}
+
+function parseSchemaValue(schemaValue) {
+  if (schemaValue == null) return null;
+  if (typeof schemaValue === 'object') return schemaValue;
+  if (typeof schemaValue !== 'string') return null;
+  try {
+    return JSON.parse(schemaValue);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSubmissionReferenceText(value) {
+  const text = pickText(value).trim();
+  return text || null;
 }
 
 function pickText(v) {
@@ -70,6 +86,11 @@ function mapGoogleQuestionTypeToAnswerType(questionDef) {
   if (['radio', 'dropdown', 'checkbox'].includes(questionDef?.type)) return 'choice';
   if (questionDef?.type === 'scale') return 'number';
   return 'text';
+}
+
+function getUserReferenceIdFromAnswer(answer) {
+  const text = pickText(extractAnswerValue(answer)).trim();
+  return text || null;
 }
 
 function extractAnswerValue(answer) {
@@ -186,15 +207,110 @@ export async function deleteForm(id) {
 }
 
 export async function updateForm(id, data) {
-  const updateData = {};
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.provider !== undefined) updateData.provider = data.provider;
-  if (data.baseLink !== undefined) updateData.baseLink = data.baseLink;
-  if (data.externalId !== undefined) updateData.externalId = data.externalId;
-  if (data.eventId !== undefined) updateData.eventId = data.eventId;
-  if (data.schema !== undefined) updateData.schema = serializeSchemaValue(data.schema);
+  const db = getDb();
+  const formId = Number(id);
+  if (!Number.isInteger(formId) || formId <= 0) {
+    throw new Error(`Invalid form id: ${id}`);
+  }
 
-  return getDb().update(forms).set(updateData).where(eq(forms.id, id)).returning();
+  const payload = data && typeof data === 'object' ? data : {};
+  const existingForm = await db.select().from(forms).where(eq(forms.id, formId)).get();
+  if (!existingForm) {
+    throw new Error(`Form with id ${formId} not found`);
+  }
+
+  const updateData = {};
+  if (payload.name !== undefined) updateData.name = payload.name;
+  if (payload.provider !== undefined) updateData.provider = payload.provider;
+  if (payload.baseLink !== undefined) updateData.baseLink = payload.baseLink;
+  if (payload.externalId !== undefined) updateData.externalId = payload.externalId;
+  if (payload.eventId !== undefined) updateData.eventId = payload.eventId;
+  if (payload.schema !== undefined) {
+    updateData.schema = serializeSchemaValue(payload.schema);
+  }
+
+  let referenceQuestion = null;
+  let normalizeReferenceQuestionId = null;
+  if (payload.userReferenceQuestionId !== undefined) {
+    const maybeId = Number(payload.userReferenceQuestionId);
+    if (Number.isInteger(maybeId) && maybeId > 0) {
+      normalizeReferenceQuestionId = maybeId;
+      referenceQuestion = await db
+        .select({ id: questions.id, text: questions.text, answerType: questions.answerType })
+        .from(questions)
+        .where(and(eq(questions.id, maybeId), eq(questions.formId, formId)))
+        .get();
+
+      if (!referenceQuestion) {
+        throw new Error('Selected reference ID question does not belong to this survey');
+      }
+
+      if (referenceQuestion.answerType !== 'text') {
+        throw new Error('Reference ID question must be a text question');
+      }
+    }
+
+    const currentSchema =
+      parseSchemaValue(payload.schema !== undefined ? payload.schema : existingForm.schema) || {};
+
+    let googleReferenceQuestionId = null;
+    if (normalizeReferenceQuestionId != null && Array.isArray(currentSchema.questions)) {
+      const normalizedTarget = pickText(referenceQuestion?.text).trim().toLowerCase();
+      const matched = currentSchema.questions.find((q) => {
+        const title = pickText(q?.title).trim().toLowerCase();
+        return title && title === normalizedTarget;
+      });
+      googleReferenceQuestionId = pickText(matched?.questionId).trim() || null;
+    }
+
+    updateData.schema = serializeSchemaValue({
+      ...currentSchema,
+      userReferenceQuestionDbId: normalizeReferenceQuestionId,
+      userReferenceQuestionId: googleReferenceQuestionId
+    });
+  }
+
+  const hasFormUpdates = Object.keys(updateData).length > 0;
+  const updatedRows = hasFormUpdates
+    ? await db.update(forms).set(updateData).where(eq(forms.id, formId)).returning()
+    : [existingForm];
+
+  if (payload.userReferenceQuestionId !== undefined) {
+    await db.run(sql`update submissions set user_reference_id = NULL where form_id = ${formId}`);
+
+    if (normalizeReferenceQuestionId != null) {
+      const submissionRows = await db
+        .select({ id: submissions.id })
+        .from(submissions)
+        .where(eq(submissions.formId, formId));
+
+      const submissionIds = submissionRows.map((row) => row.id);
+      if (submissionIds.length > 0) {
+        const referenceResponses = await db
+          .select({
+            submissionId: responses.submissionId,
+            valueText: responses.valueText
+          })
+          .from(responses)
+          .where(
+            and(
+              eq(responses.questionId, normalizeReferenceQuestionId),
+              inArray(responses.submissionId, submissionIds)
+            )
+          );
+
+        for (const row of referenceResponses) {
+          const referenceText = normalizeSubmissionReferenceText(row.valueText);
+          if (!referenceText) continue;
+          await db.run(
+            sql`update submissions set user_reference_id = ${referenceText} where id = ${row.submissionId}`
+          );
+        }
+      }
+    }
+  }
+
+  return updatedRows;
 }
 
 export async function refreshSchemaAndResponses(formId) {
@@ -213,20 +329,15 @@ export async function refreshSchemaAndResponses(formId) {
     const googleForm = googleFormRes?.data || googleFormRes;
     const googleResponses = await getGoogleFormResponsesById(externalId);
     const questionDefs = extractGoogleQuestionDefinitions(googleForm);
-
-    const schema = {
-      source: 'google_forms',
-      googleFormId: externalId,
-      title: pickText(googleForm?.info?.title || form.name),
-      questionHeaders: questionDefs.map((d) => d.title),
-      questions: questionDefs
-    };
+    let configuredReferenceQuestionId = '';
+    try {
+      const parsedSchema = form?.schema ? JSON.parse(form.schema) : null;
+      configuredReferenceQuestionId = pickText(parsedSchema?.userReferenceQuestionId).trim();
+    } catch {
+      configuredReferenceQuestionId = '';
+    }
 
     const db = getDb();
-    await db
-      .update(forms)
-      .set({ schema: serializeSchemaValue(schema) })
-      .where(eq(forms.id, formId));
 
     const existingQuestions = await db
       .select({ id: questions.id })
@@ -270,25 +381,52 @@ export async function refreshSchemaAndResponses(formId) {
       questionRows.push({
         ...questionRow,
         googleQuestionId: def.questionId,
-        answerType
+        answerType,
+        questionIndex: questionRows.length
       });
     }
+
+    const referenceQuestion = configuredReferenceQuestionId
+      ? questionRows.find((q) => q.googleQuestionId === configuredReferenceQuestionId) || null
+      : null;
+
+    const schema = {
+      source: 'google_forms',
+      googleFormId: externalId,
+      userReferenceQuestionId: configuredReferenceQuestionId || null,
+      userReferenceQuestionDbId: referenceQuestion?.id || null,
+      title: pickText(googleForm?.info?.title || form.name),
+      questionHeaders: questionDefs.map((d) => d.title),
+      questions: questionDefs
+    };
+
+    await db
+      .update(forms)
+      .set({ schema: serializeSchemaValue(schema) })
+      .where(eq(forms.id, formId));
 
     for (const response of googleResponses?.responses || []) {
       const externalResponseId = pickText(response?.responseId || '').trim();
       if (!externalResponseId) continue;
 
+      const answersObj = response?.answers || {};
+      const answerValuesByIndex = Object.values(answersObj);
+      const userReferenceAnswer = referenceQuestion
+        ? referenceQuestion.googleQuestionId
+          ? answersObj[referenceQuestion.googleQuestionId] || null
+          : answerValuesByIndex[referenceQuestion.questionIndex] || null
+        : null;
+      const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
+
       const [submission] = await db
         .insert(submissions)
         .values({
           formId,
+          userReferenceId,
           submittedAt: parseSubmittedAt(response),
           externalId: externalResponseId
         })
         .returning();
-
-      const answersObj = response?.answers || {};
-      const answerValuesByIndex = Object.values(answersObj);
 
       for (let i = 0; i < questionRows.length; i++) {
         const question = questionRows[i];
