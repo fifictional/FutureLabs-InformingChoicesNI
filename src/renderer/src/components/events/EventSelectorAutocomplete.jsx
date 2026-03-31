@@ -9,6 +9,7 @@ export default function EventSelectorAutocomplete({
   disabled = false,
   onAddRequested,
   reloadToken,
+  helperText,
 }) {
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -47,9 +48,15 @@ export default function EventSelectorAutocomplete({
       value={selectedOption}
       inputValue={value || ""}
       disabled={disabled}
-      getOptionLabel={(option) =>
-        typeof option === "string" ? option : option?.inputValue || option?.name || ""
-      }
+      getOptionLabel={(option) => {
+        if (typeof option === 'string') {
+          return option;
+        }
+        if (option.inputValue) {
+          return option.inputValue;
+        }
+        return option.name;
+      }}
       onInputChange={(_event, newInputValue, reason) => {
         // Ignore internal reset events so selected values are not overwritten.
         if (reason === "input" || reason === "clear") {
@@ -70,12 +77,13 @@ export default function EventSelectorAutocomplete({
           filtered.push({
             id: "add-new",
             inputValue,
-            name: `Add \"${inputValue}\"`,
+            name: `Create \"${inputValue}\"`,
           });
         }
 
         return filtered;
       }}
+      renderOption={(props, option) => <li {...props}>{option.name}</li>}
       onChange={(_event, newValue) => {
         if (!newValue) {
           onChange("");
@@ -97,6 +105,12 @@ export default function EventSelectorAutocomplete({
           margin="dense"
           label={label}
           required={required}
+          helperText={
+            helperText ||
+            (onAddRequested
+              ? 'Select an existing event, or type a name and choose "Create \"name\"" to add one.'
+              : undefined)
+          }
           fullWidth
         />
       )}

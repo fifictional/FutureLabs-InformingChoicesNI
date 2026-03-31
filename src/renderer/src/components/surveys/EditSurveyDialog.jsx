@@ -1,13 +1,37 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from "@mui/material";
+import {
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    MenuItem,
+    Stack,
+    TextField,
+    Typography
+} from "@mui/material";
 import { useEffect, useState } from "react";
 import EventSelectorAutocomplete from "../events/EventSelectorAutocomplete.jsx";
 import CreateEventDialog from "../events/CreateEventDialog.jsx";
 
+function normalizeSchema(schemaValue) {
+    if (!schemaValue) return null;
+    if (typeof schemaValue === "object") return schemaValue;
+    if (typeof schemaValue !== "string") return null;
+    try {
+        return JSON.parse(schemaValue);
+    } catch {
+        return null;
+    }
+}
+
 export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ...props }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [referenceQuestions, setReferenceQuestions] = useState([]);
+    const [loadingReferenceQuestions, setLoadingReferenceQuestions] = useState(false);
     const [newName, setNewName] = useState(survey?.name || '');
     const [newEventName, setNewEventName] = useState(survey?.eventName || '');
+    const [newReferenceQuestionId, setNewReferenceQuestionId] = useState('');
     const [createEventOpen, setCreateEventOpen] = useState(false);
     const [pendingNewEventName, setPendingNewEventName] = useState('');
     const [eventSelectorReloadToken, setEventSelectorReloadToken] = useState(0);
@@ -23,7 +47,11 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
                 return;
             }
 
-            await window.api.forms.update(survey.id, { name: newName, eventId: updatedEvent.id });
+            await window.api.forms.update(survey.id, {
+                name: newName,
+                eventId: updatedEvent.id,
+                userReferenceQuestionId: newReferenceQuestionId ? Number(newReferenceQuestionId) : null
+            });
             if (onEdit) {
                 onEdit();
             }
@@ -37,12 +65,46 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
     };
 
     useEffect(() => {
+        async function loadReferenceQuestions() {
+            if (!open || !survey?.id) return;
+
+            setLoadingReferenceQuestions(true);
+            try {
+                const allQuestions = await window.api.questions.listByForm(survey.id);
+                const textQuestions = (Array.isArray(allQuestions) ? allQuestions : []).filter(
+                    (question) => question.answerType === 'text'
+                );
+
+                const schema = normalizeSchema(survey?.schema);
+                const presetDbId = schema?.userReferenceQuestionDbId;
+                const legacyPresetId = Number(schema?.userReferenceQuestionId);
+
+                setReferenceQuestions(textQuestions);
+
+                if (presetDbId && textQuestions.some((q) => q.id === presetDbId)) {
+                    setNewReferenceQuestionId(String(presetDbId));
+                } else if (Number.isInteger(legacyPresetId) && textQuestions.some((q) => q.id === legacyPresetId)) {
+                    setNewReferenceQuestionId(String(legacyPresetId));
+                } else {
+                    setNewReferenceQuestionId('');
+                }
+            } catch (err) {
+                console.error(err);
+                setReferenceQuestions([]);
+                setNewReferenceQuestionId('');
+                setError('Failed to load form questions.');
+            } finally {
+                setLoadingReferenceQuestions(false);
+            }
+        }
+
         if (survey) {
             setNewName(survey.name);
             setNewEventName(survey.eventName || '');
             setError(null);
+            loadReferenceQuestions();
         }
-    }, [survey]);
+    }, [open, survey]);
     
     if (!survey) {
         return null;
@@ -68,6 +130,26 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
                                 setCreateEventOpen(true);
                             }}
                         />
+                        <TextField
+                            select
+                            fullWidth
+                            label="Reference ID Question"
+                            value={newReferenceQuestionId}
+                            onChange={(e) => setNewReferenceQuestionId(e.target.value)}
+                            disabled={loading || loadingReferenceQuestions}
+                            helperText={
+                                loadingReferenceQuestions
+                                    ? 'Loading text questions...'
+                                    : 'Optional. Changing this will recalculate reference IDs for all existing submissions in this survey.'
+                            }
+                        >
+                            <MenuItem value="">None</MenuItem>
+                            {referenceQuestions.map((question) => (
+                                <MenuItem key={question.id} value={String(question.id)}>
+                                    {question.text}
+                                </MenuItem>
+                            ))}
+                        </TextField>
                         {error && <Typography color="error">{error}</Typography>}
                     </Stack>
                 </DialogContent>
