@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { getDb } from '../client';
 import {
   forms,
@@ -52,6 +52,185 @@ function parseNumber(valueText, valueNumber) {
   if (typeof valueNumber === 'number' && Number.isFinite(valueNumber)) return valueNumber;
   const parsed = Number(String(valueText ?? '').trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeReferenceId(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  const lowered = text.toLowerCase();
+  if (lowered === 'null' || lowered === 'undefined' || lowered === '{}' || lowered === '[]') {
+    return null;
+  }
+
+  return text;
+}
+
+function parseSchemaValue(schemaValue) {
+  if (schemaValue == null) return null;
+  if (typeof schemaValue === 'object') return schemaValue;
+  if (typeof schemaValue !== 'string') return null;
+
+  try {
+    return JSON.parse(schemaValue);
+  } catch {
+    return null;
+  }
+}
+
+async function listSubmissionReferenceRows() {
+  const db = getDb();
+  const submissionRows = await db
+    .select({
+      submissionId: submissions.id,
+      formId: submissions.formId,
+      submittedAt: submissions.submittedAt,
+      formSchema: forms.schema
+    })
+    .from(submissions)
+    .leftJoin(forms, eq(forms.id, submissions.formId));
+
+  let storedReferenceRows = [];
+  try {
+    storedReferenceRows = await db
+      .select({ submissionId: submissions.id, userReferenceId: submissions.userReferenceId })
+      .from(submissions);
+  } catch {
+    storedReferenceRows = [];
+  }
+
+  const storedReferenceBySubmission = new Map(
+    storedReferenceRows.map((row) => [row.submissionId, normalizeReferenceId(row.userReferenceId)])
+  );
+
+  const formIds = Array.from(
+    new Set(
+      submissionRows
+        .map((row) => Number(row.formId))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    )
+  );
+
+  const questionRowsByForm = new Map();
+  if (formIds.length > 0) {
+    const allQuestionRows = await db
+      .select({ id: questions.id, formId: questions.formId, text: questions.text })
+      .from(questions)
+      .where(inArray(questions.formId, formIds));
+
+    for (const row of allQuestionRows) {
+      if (!questionRowsByForm.has(row.formId)) {
+        questionRowsByForm.set(row.formId, []);
+      }
+      questionRowsByForm.get(row.formId).push(row);
+    }
+  }
+
+  function resolveConfiguredReferenceQuestionId(formId, schema) {
+    const questionsForForm = questionRowsByForm.get(formId) || [];
+
+    const dbQuestionId = Number(schema?.userReferenceQuestionDbId);
+    if (
+      Number.isInteger(dbQuestionId) &&
+      dbQuestionId > 0 &&
+      questionsForForm.some((q) => q.id === dbQuestionId)
+    ) {
+      return dbQuestionId;
+    }
+
+    const rawLegacyId = String(schema?.userReferenceQuestionId ?? '').trim();
+    if (!rawLegacyId) return null;
+
+    const legacyNumericId = Number(rawLegacyId);
+    if (
+      Number.isInteger(legacyNumericId) &&
+      legacyNumericId > 0 &&
+      questionsForForm.some((q) => q.id === legacyNumericId)
+    ) {
+      return legacyNumericId;
+    }
+
+    if (Array.isArray(schema?.questions)) {
+      const matchedQuestionDef = schema.questions.find((q) => {
+        const questionId = String(q?.questionId ?? '').trim();
+        return questionId && questionId === rawLegacyId;
+      });
+
+      const targetTitle = String(matchedQuestionDef?.title ?? '').trim();
+      if (targetTitle) {
+        const normalizedTargetTitle = normalizeText(targetTitle);
+        const matchedDbQuestion = questionsForForm.find(
+          (q) => normalizeText(q.text) === normalizedTargetTitle
+        );
+        if (matchedDbQuestion) return matchedDbQuestion.id;
+      }
+    }
+
+    return null;
+  }
+
+  const referenceQuestionByForm = new Map();
+  const referenceQuestionIds = new Set();
+  const expectedQuestionBySubmission = new Map();
+
+  for (const row of submissionRows) {
+    if (!referenceQuestionByForm.has(row.formId)) {
+      const schema = parseSchemaValue(row.formSchema);
+      const resolvedQuestionId = resolveConfiguredReferenceQuestionId(row.formId, schema);
+      if (resolvedQuestionId != null) {
+        referenceQuestionByForm.set(row.formId, resolvedQuestionId);
+        referenceQuestionIds.add(resolvedQuestionId);
+      } else {
+        referenceQuestionByForm.set(row.formId, null);
+      }
+    }
+
+    const configuredQuestionId = referenceQuestionByForm.get(row.formId);
+    if (configuredQuestionId != null) {
+      expectedQuestionBySubmission.set(row.submissionId, configuredQuestionId);
+    }
+  }
+
+  const derivedReferenceBySubmission = new Map();
+  if (referenceQuestionIds.size > 0) {
+    const responseRows = await db
+      .select({
+        submissionId: responses.submissionId,
+        questionId: responses.questionId,
+        valueText: responses.valueText,
+        valueChoice: responses.valueChoice
+      })
+      .from(responses)
+      .where(inArray(responses.questionId, Array.from(referenceQuestionIds)));
+
+    for (const row of responseRows) {
+      const expectedQuestionId = expectedQuestionBySubmission.get(row.submissionId);
+      if (expectedQuestionId == null || row.questionId !== expectedQuestionId) continue;
+
+      const rawValue = row.valueText ?? row.valueChoice;
+      const normalized = normalizeReferenceId(rawValue);
+      if (!normalized) continue;
+
+      if (!derivedReferenceBySubmission.has(row.submissionId)) {
+        derivedReferenceBySubmission.set(row.submissionId, normalized);
+      }
+    }
+  }
+
+  return submissionRows.map((row) => {
+    const configuredReferenceQuestionId = referenceQuestionByForm.get(row.formId);
+    const derivedReferenceId = derivedReferenceBySubmission.get(row.submissionId) || null;
+    const storedReferenceId = storedReferenceBySubmission.get(row.submissionId) || null;
+
+    return {
+      submittedAt: row.submittedAt,
+      // Prefer derived value from configured reference question; fallback to stored value.
+      userReferenceId:
+        configuredReferenceQuestionId != null
+          ? derivedReferenceId || storedReferenceId
+          : storedReferenceId
+    };
+  });
 }
 
 function questionMatchesRequirement(question, requirement, yesNoChoiceQuestionIds) {
@@ -341,27 +520,34 @@ export async function getDashboardOverviewData() {
 
   const db = getDb();
 
-  const totalFeedbackRow = await db
-    .select({ count: db.$count(submissions) })
-    .from(submissions)
-    .get();
+  const totalFeedbackRow = await db.select({ count: count() }).from(submissions).get();
   const totalFeedbackReceived = Number(totalFeedbackRow?.count || 0);
 
-  const yearlyRows = await db
-    .select({ submittedAt: submissions.submittedAt })
-    .from(submissions)
-    .where(isNotNull(submissions.submittedAt));
+  const identifiedRows = await listSubmissionReferenceRows();
 
-  const yearlyCountMap = new Map();
-  for (const row of yearlyRows) {
+  const totalUniqueReferences = new Set();
+  let unidentifiedSubmissionCount = 0;
+  const yearlyReferenceMap = new Map();
+  for (const row of identifiedRows) {
+    const referenceId = normalizeReferenceId(row.userReferenceId);
+    if (!referenceId) {
+      unidentifiedSubmissionCount += 1;
+      continue;
+    }
+
+    totalUniqueReferences.add(referenceId);
+
+    if (!row.submittedAt) continue;
     const date = new Date(row.submittedAt);
     if (Number.isNaN(date.getTime())) continue;
+
     const year = String(date.getFullYear());
-    yearlyCountMap.set(year, (yearlyCountMap.get(year) || 0) + 1);
+    if (!yearlyReferenceMap.has(year)) yearlyReferenceMap.set(year, new Set());
+    yearlyReferenceMap.get(year).add(referenceId);
   }
 
-  const yearlyServiceUsers = Array.from(yearlyCountMap.entries())
-    .map(([year, count]) => ({ year, count }))
+  const yearlyServiceUsers = Array.from(yearlyReferenceMap.entries())
+    .map(([year, references]) => ({ year, count: references.size }))
     .sort((a, b) => Number(a.year) - Number(b.year));
 
   const metrics = await listConfigurableOverviewMetrics();
@@ -520,6 +706,9 @@ export async function getDashboardOverviewData() {
 
   return {
     totalFeedbackReceived,
+    totalUsers: totalUniqueReferences.size + unidentifiedSubmissionCount,
+    totalIdentifiedUsers: totalUniqueReferences.size,
+    totalUnidentifiedUsers: unidentifiedSubmissionCount,
     yearlyServiceUsers,
     metricConfig: metrics,
     metricData

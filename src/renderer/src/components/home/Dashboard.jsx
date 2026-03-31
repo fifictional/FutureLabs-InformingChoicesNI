@@ -109,58 +109,6 @@ const GEO_COORDINATES = {
 };
 
 export default function Dashboard() {
-  const staticResponses = [
-    {
-      name: 'Alice',
-      age: 34,
-      satisfaction: 4,
-      improved: true,
-      area: 'Belfast',
-      referral: 'GP',
-      appointments: 3,
-      year: 2023
-    },
-    {
-      name: 'Bob',
-      age: 28,
-      satisfaction: 5,
-      improved: true,
-      area: 'Derry',
-      referral: 'Self',
-      appointments: 1,
-      year: 2023
-    },
-    {
-      name: 'Carol',
-      age: 45,
-      satisfaction: 3,
-      improved: false,
-      area: 'Belfast',
-      referral: 'GP',
-      appointments: 2,
-      year: 2024
-    },
-    {
-      name: 'Dan',
-      age: 31,
-      satisfaction: 4,
-      improved: true,
-      area: 'Armagh',
-      referral: 'Social Worker',
-      appointments: 4,
-      year: 2024
-    },
-    {
-      name: 'Eve',
-      age: 52,
-      satisfaction: 2,
-      improved: false,
-      area: 'Derry',
-      referral: 'Self',
-      appointments: 2,
-      year: 2024
-    }
-  ];
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
@@ -273,6 +221,9 @@ export default function Dashboard() {
   }
 
   const totalSubmissions = Number(dashboardData?.totalFeedbackReceived || 0);
+  const totalUsers = Number(dashboardData?.totalUsers || 0);
+  const totalIdentifiedUsers = Number(dashboardData?.totalIdentifiedUsers || 0);
+  const totalUnidentifiedUsers = Number(dashboardData?.totalUnidentifiedUsers || 0);
 
   useEffect(() => {
       const loadDataAndRefresh = async () => {
@@ -301,17 +252,11 @@ export default function Dashboard() {
       ? improvedMetric.percent.toFixed(1)
       : null;
 
-  const appointmentsDelivered = staticResponses.reduce((sum, r) => sum + r.appointments, 0);
-
   const ageBandData = Array.isArray(ageMetric.bands) ? ageMetric.bands : [];
   const referralData = Array.isArray(referralMetric.categories) ? referralMetric.categories : [];
-
-  const yearlyData = Object.entries(
-    staticResponses.reduce((groups, r) => {
-      groups[r.year] = (groups[r.year] || 0) + 1;
-      return groups;
-    }, {})
-  ).map(([year, count]) => ({ year, count }));
+  const yearlyData = Array.isArray(dashboardData?.yearlyServiceUsers)
+    ? dashboardData.yearlyServiceUsers
+    : [];
 
   const geoData = (Array.isArray(geoMetric.categories) ? geoMetric.categories : [])
     .map((entry) => {
@@ -470,9 +415,15 @@ export default function Dashboard() {
               <MissingMetricMessage metricName={CONFIGURABLE_METRIC_NAMES.improved} />
             )}
           </SmallStatisticCard>
-          <SmallStatisticCard title="Total Appointments Delivered">
+          <SmallStatisticCard title="Total Users">
             <Typography variant="h4" fontWeight="bold">
-              {appointmentsDelivered}
+              {totalUsers}
+            </Typography>
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+              Identified (unique reference IDs): {totalIdentifiedUsers}
+            </Typography>
+            <Typography variant="caption" display="block" color="text.secondary">
+              Unidentified (no reference ID): {totalUnidentifiedUsers}
             </Typography>
           </SmallStatisticCard>
         </Box>
@@ -520,7 +471,10 @@ export default function Dashboard() {
           </ChartCard>
         </Box>
         <Box sx={{ display: 'flex', gap: 2}}>
-          <ChartCard title="Yearly Growth in Service Users">
+          <ChartCard title="Yearly Identified Users">
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
+              Unique identified users per year based on reference IDs.
+            </Typography>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={yearlyData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                 <XAxis dataKey="year" />

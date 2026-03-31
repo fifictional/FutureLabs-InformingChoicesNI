@@ -181,6 +181,7 @@ export async function importGoogleForms(
     const schema = JSON.stringify({
       source: 'google_forms',
       googleFormId: formId,
+      userReferenceQuestionId: referenceQuestionId || null,
       title: googleTitle || name,
       questionHeaders: questionDefs.map((d) => d.title),
       questions: questionDefs
@@ -237,8 +238,8 @@ export async function importGoogleForms(
       const answerValuesByIndex = answerEntries.map(([, value]) => value);
       const userReferenceAnswer = referenceQuestion
         ? referenceQuestion.googleQuestionId
-          ? answersObj[referenceQuestion.googleQuestionId] ?? null
-          : answerValuesByIndex[referenceQuestion.questionIndex] ?? null
+          ? (answersObj[referenceQuestion.googleQuestionId] ?? null)
+          : (answerValuesByIndex[referenceQuestion.questionIndex] ?? null)
         : null;
       const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
 

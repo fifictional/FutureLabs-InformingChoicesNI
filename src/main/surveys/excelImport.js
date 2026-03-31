@@ -395,7 +395,8 @@ export async function commitExcelImport(
       });
     }
 
-    const referenceQuestion = referenceQuestionIndex == null ? null : qs[referenceQuestionIndex] || null;
+    const referenceQuestion =
+      referenceQuestionIndex == null ? null : qs[referenceQuestionIndex] || null;
     if (referenceQuestion && referenceQuestion.answerType !== 'text') {
       throw new Error('Selected user reference ID question must be a text question');
     }
