@@ -1,11 +1,13 @@
 import { toPng } from 'html-to-image';
 
 function sanitizeFilenamePart(value) {
-  return String(value || 'chart')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'chart';
+  return (
+    String(value || 'chart')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'chart'
+  );
 }
 
 export async function exportElementAsPng(element, name) {
