@@ -1,9 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron';
-import { existsSync } from 'fs';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { initDb, initialDbSetup } from './db/client.js';
+import { ensureDatabaseReady, initDb } from './db/client.js';
 import * as eventService from './db/services/eventService.js';
 import * as eventTagService from './db/services/eventTagService.js';
 import * as formService from './db/services/formService';
@@ -35,7 +33,7 @@ let mainWindow;
 function createWindow() {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 1280,
+    width: 1440,
     height: 900,
     show: false,
     frame: false,
@@ -87,22 +85,8 @@ app.whenReady().then(async () => {
     ? join(process.resourcesPath, 'drizzle')
     : join(__dirname, '../../drizzle');
 
-  initialDbSetup(migrationsFolder);
-  const db = initDb();
-
-  // Skip migration in fresh projects until the first migration set is generated.
-  if (existsSync(migrationsFolder)) {
-    try {
-      migrate(db, { migrationsFolder });
-    } catch (error) {
-      console.error(
-        'Failed to run database migrations from folder:',
-        migrationsFolder,
-        '\nError:',
-        error
-      );
-    }
-  }
+  ensureDatabaseReady(migrationsFolder);
+  initDb();
 
   createWindow();
 
