@@ -24,19 +24,17 @@ export default function GoogleAuthLayout() {
         setWaitingLogin(true);
         const response = await window.api.googleAuth.ensureAuthenticated();
         setWaitingLogin(false);
-        if (response) {
+        if (response === true) {
             setIsAuthenticated(true);
+            setError(null);
         } else {
+            setIsAuthenticated(false);
             setError('Google authentication failed, contact developers if this issue persists.');
         }
     }
 
     const handleClose = () => {
         window.api.window.close();
-    }
-
-    if (isAuthenticated === null) {
-        return <div>Checking authentication...</div>;
     }
 
     if (isAuthenticated === false) {
@@ -79,6 +77,10 @@ export default function GoogleAuthLayout() {
             </Dialog>
             </>
         )
+    }
+
+    if (!isAuthenticated) {
+        return <div>Checking authentication...</div>;
     }
 
   return (

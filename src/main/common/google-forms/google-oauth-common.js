@@ -36,6 +36,12 @@ export function readEncryptedToken(tokenFilePath) {
   return JSON.parse(json);
 }
 
+export function deleteEncryptedToken(tokenFilePath) {
+  if (fs.existsSync(tokenFilePath)) {
+    fs.unlinkSync(tokenFilePath);
+  }
+}
+
 export function getAppUserDataPath(...segments) {
   return path.join(app.getPath('userData'), ...segments);
 }

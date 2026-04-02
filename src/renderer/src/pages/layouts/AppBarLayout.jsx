@@ -149,6 +149,17 @@ export default function AppBarLayout() {
         setDrawerOpen(false);
     };
 
+    const handleSignOut = async () => {
+        try {
+            await window.api.googleAuth.signOut();
+        } catch (error) {
+            console.error('Error signing out from Google:', error);
+        } finally {
+            setUserInfo(null);
+            window.location.reload();
+        }
+    };
+
     return (
         <>
         <Drawer
@@ -191,6 +202,7 @@ export default function AppBarLayout() {
                     <Stack css={userPanelStyles} spacing={2} direction="row" alignItems="center" justifyContent="start">
                         <Typography>{userInfo.name}</Typography>
                         <Avatar alt="User Avatar" src={userInfo.pictureBase64} />
+                        <Button size="small" variant="outlined" onClick={handleSignOut}>Sign out</Button>
                     </Stack>
                 }
                 <Stack css={windowControlsStyle} direction="row" alignItems="center" justifyContent="start">

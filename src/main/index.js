@@ -24,7 +24,8 @@ import {
 import {
   ensureAuthenticated,
   getUserProfile,
-  isUserAuthenticated
+  isUserAuthenticated,
+  signOut
 } from './common/google-forms/google-auth-client.js';
 import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
 import { importGoogleForms } from './surveys/googleFormsImport.js';
@@ -221,6 +222,7 @@ ipcMain.handle('charts:parseConfiguration', (_event, chart) =>
 ipcMain.handle('googleAuth:isUserAuthenticated', () => isUserAuthenticated());
 ipcMain.handle('googleAuth:ensureAuthenticated', () => ensureAuthenticated());
 ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
+ipcMain.handle('googleAuth:signOut', () => signOut());
 
 // google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));

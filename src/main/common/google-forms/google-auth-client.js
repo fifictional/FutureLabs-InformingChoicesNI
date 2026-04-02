@@ -1,6 +1,7 @@
 import { getSetting, SETTINGS_KEYS } from '../settings/settings';
 import {
   createOAuthClient,
+  deleteEncryptedToken,
   getAppUserDataPath,
   readEncryptedToken,
   runInteractiveOAuthFlow,
@@ -30,6 +31,10 @@ function saveGoogleToken(tokenObject) {
 
 function readSavedGoogleToken() {
   return readEncryptedToken(getTokenFilePath());
+}
+
+function clearSavedGoogleToken() {
+  deleteEncryptedToken(getTokenFilePath());
 }
 
 async function getNewTokenInteractive() {
@@ -72,13 +77,19 @@ export async function ensureAuthenticated() {
     const authenticated = await isUserAuthenticated();
     if (authenticated) {
       return true;
-    } else {
-      await getNewTokenInteractive();
-      return true;
     }
+
+    await getNewTokenInteractive();
+    return true;
   } catch (error) {
-    return error;
+    console.warn('Google authentication failed:', error);
+    return false;
   }
+}
+
+export async function signOut() {
+  clearSavedGoogleToken();
+  return true;
 }
 
 async function fetchUserProfilePictureBase64(pictureUrl) {

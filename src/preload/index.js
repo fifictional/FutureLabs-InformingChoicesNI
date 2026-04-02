@@ -98,7 +98,8 @@ const api = {
   googleAuth: {
     isUserAuthenticated: () => ipcRenderer.invoke('googleAuth:isUserAuthenticated'),
     ensureAuthenticated: () => ipcRenderer.invoke('googleAuth:ensureAuthenticated'),
-    getUserProfile: () => ipcRenderer.invoke('googleAuth:getUserProfile')
+    getUserProfile: () => ipcRenderer.invoke('googleAuth:getUserProfile'),
+    signOut: () => ipcRenderer.invoke('googleAuth:signOut')
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
