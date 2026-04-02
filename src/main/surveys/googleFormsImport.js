@@ -26,36 +26,34 @@ function extractGoogleQuestionDefinitions(form) {
       itemId: it?.itemId ? pickText(it.itemId) : null,
       questionId: q.questionId ? pickText(q.questionId) : null,
       title,
-      type: 'unknown',
+      kind: 'unknown',
       options: []
     };
     if (q.choiceQuestion) {
-      const cq = q.choiceQuestion;
-      const t = String(cq.type || 'RADIO').toLowerCase();
-      if (t === 'checkbox') def.type = 'checkbox';
-      else if (t === 'drop_down') def.type = 'dropdown';
-      else def.type = 'radio';
-      def.options = (cq.options || []).map((o) => pickText(o.value));
+      def.kind = 'choiceQuestion';
+      def.options = (q.choiceQuestion.options || []).map((o) => pickText(o.value));
     } else if (q.textQuestion) {
-      def.type = q.textQuestion.paragraph ? 'paragraph' : 'text';
+      def.kind = 'textQuestion';
     } else if (q.scaleQuestion) {
       const s = q.scaleQuestion;
-      def.type = 'scale';
+      def.kind = 'scaleQuestion';
       def.scale = {
         low: s.low,
         high: s.high,
         lowLabel: pickText(s.lowLabel),
         highLabel: pickText(s.highLabel)
       };
+    } else if (q.ratingQuestion) {
+      def.kind = 'ratingQuestion';
     } else if (q.dateQuestion) {
-      def.type = 'date';
+      def.kind = 'dateQuestion';
     } else if (q.timeQuestion) {
-      def.type = 'time';
+      def.kind = 'timeQuestion';
     } else if (q.fileUploadQuestion) {
-      def.type = 'file_upload';
+      def.kind = 'fileUploadQuestion';
     } else if (q.rowQuestion) {
       const rq = q.rowQuestion;
-      def.type = 'grid';
+      def.kind = 'gridQuestion';
       def.rows = (rq.rows || []).map((r) => pickText(r.value));
       def.columns = (rq.columns || []).map((c) => pickText(c.value));
     }
@@ -89,9 +87,23 @@ function parseSubmittedAt(resp) {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
-function mapGoogleQuestionTypeToAnswerType(questionDef) {
-  if (['radio', 'dropdown', 'checkbox'].includes(questionDef?.type)) return 'choice';
-  if (questionDef?.type === 'scale') return 'number';
+function mapGoogleQuestionTypeToAnswerType(questionDef, responses = []) {
+  const kind = questionDef?.kind;
+  if (kind === 'choiceQuestion') return 'choice';
+  if (kind === 'ratingQuestion' || kind === 'scaleQuestion') return 'number';
+
+  // For textQuestion, check if all responses are valid numbers
+  if (kind === 'textQuestion' && Array.isArray(responses) && responses.length > 0) {
+    const allNumeric = responses.every((resp) => {
+      if (!resp) return true; // Empty responses don't disqualify as numeric
+      const text = pickText(extractAnswerValue(resp)).trim();
+      if (!text) return true; // Empty strings don't disqualify
+      const num = Number(text);
+      return !Number.isNaN(num) && Number.isFinite(num) && text === String(num);
+    });
+    if (allNumeric) return 'number';
+  }
+
   return 'text';
 }
 
@@ -196,10 +208,37 @@ export async function importGoogleForms(
       schema
     });
 
+    // Collect responses first to determine answer types
+    const responseData = await getGoogleFormResponsesById(formId);
+    const responses = responseData?.responses || [];
+
+    const responsesByQuestionDef = {};
+    for (let i = 0; i < questionDefs.length; i++) {
+      responsesByQuestionDef[i] = [];
+    }
+
+    for (const r of responses) {
+      const answersObj = r?.answers || {};
+      const answerEntries = Object.entries(answersObj);
+      const answerValuesByIndex = answerEntries.map(([, value]) => value);
+
+      for (let i = 0; i < questionDefs.length; i++) {
+        const def = questionDefs[i];
+        const answer =
+          def.questionId && answersObj[def.questionId]
+            ? answersObj[def.questionId]
+            : (answerValuesByIndex[i] ?? null);
+
+        if (answer) {
+          responsesByQuestionDef[i].push(answer);
+        }
+      }
+    }
+
     const questionRows = [];
     for (let i = 0; i < questionDefs.length; i++) {
       const def = questionDefs[i];
-      const answerType = mapGoogleQuestionTypeToAnswerType(def);
+      const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
       const [questionRow] = await questionService.createQuestion({
         formId: dbForm.id,
         text: def.title,
@@ -223,8 +262,6 @@ export async function importGoogleForms(
       : null;
 
     // import responses (best-effort)
-    const responseData = await getGoogleFormResponsesById(formId);
-    const responses = responseData?.responses || [];
     const existingSubs = await submissionService.listSubmissionsByForm(dbForm.id);
     const existingByExternalId = new Set(existingSubs.map((s) => s.externalId));
 

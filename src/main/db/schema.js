@@ -57,6 +57,7 @@ export const submissions = sqliteTable(
     formId: integer('form_id')
       .notNull()
       .references(() => forms.id, { onDelete: 'cascade' }),
+    userReferenceId: text('user_reference_id'),
     submittedAt: integer('submitted_at', { mode: 'timestamp' }).notNull(),
     externalId: text('external_id').notNull()
   },
@@ -85,13 +86,6 @@ export const responses = sqliteTable(
   ]
 );
 
-export const statisticOverviews = sqliteTable('statistic_overviews', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  name: text('name').notNull().unique(),
-  defaultQuestion: text('default_question').notNull(),
-  questionId: integer('question_id').references(() => questions.id, { onDelete: 'set null' })
-});
-
 export const questionChoice = sqliteTable('question_choice', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   questionId: integer('question_id'),
@@ -103,4 +97,23 @@ export const clients = sqliteTable('clients', {
   nonConfidentialIdentifier: text('non_confidential_identifier'),
   dateOfBirth: integer('date_of_birth', { mode: 'timestamp' }),
   referenceId: text('reference_id').notNull().unique()
+});
+
+export const statisticOverviews = sqliteTable('statistic_overviews', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  defaultQuestion: text('default_question').notNull(),
+  questionId: integer('question_id').references(() => questions.id, { onDelete: 'set null' })
+});
+
+export const charts = sqliteTable('charts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  chartType: text('chart_type', {
+    enum: ['question', 'comparison', 'response_trend', 'geo', 'word_cloud']
+  }).notNull(),
+  configuration: text('configuration').notNull(), // JSON string storing the block configuration
+  displayOrder: integer('display_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 });

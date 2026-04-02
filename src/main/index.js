@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { initDb } from './db/client.js';
+import { initDb, initialDbSetup } from './db/client.js';
 import * as eventService from './db/services/eventService.js';
 import * as eventTagService from './db/services/eventTagService.js';
 import * as formService from './db/services/formService';
@@ -11,6 +11,7 @@ import * as questionService from './db/services/questionService';
 import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import * as statisticOverviewService from './db/services/statisticOverviewService';
+import * as chartService from './db/services/chartService.js';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
 import {
@@ -84,6 +85,7 @@ app.whenReady().then(async () => {
     ? join(process.resourcesPath, 'drizzle')
     : join(__dirname, '../../drizzle');
 
+  initialDbSetup(migrationsFolder);
   const db = initDb();
 
   // Skip migration in fresh projects until the first migration set is generated.
@@ -189,6 +191,17 @@ ipcMain.handle('statistics:setMetricQuestion', (_event, metricName, questionId) 
 );
 ipcMain.handle('statistics:getDashboardOverviewData', () =>
   statisticOverviewService.getDashboardOverviewData()
+);
+
+// charts
+ipcMain.handle('charts:list', () => chartService.listCharts());
+ipcMain.handle('charts:findById', (_event, id) => chartService.findChartById(id));
+ipcMain.handle('charts:create', (_event, data) => chartService.createChart(data));
+ipcMain.handle('charts:update', (_event, id, data) => chartService.updateChart(id, data));
+ipcMain.handle('charts:delete', (_event, id) => chartService.deleteChart(id));
+ipcMain.handle('charts:reorder', (_event, chartIds) => chartService.reorderCharts(chartIds));
+ipcMain.handle('charts:parseConfiguration', (_event, chart) =>
+  chartService.parseChartConfiguration(chart)
 );
 
 // google auth
