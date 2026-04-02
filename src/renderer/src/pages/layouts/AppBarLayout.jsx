@@ -1,4 +1,20 @@
-import { AppBar, Avatar, Button, css, IconButton, Stack, Toolbar, Typography, useTheme } from "@mui/material";
+import {
+    AppBar,
+    Avatar,
+    Box,
+    Button,
+    css,
+    Divider,
+    Drawer,
+    IconButton,
+    List,
+    ListItemButton,
+    ListItemText,
+    Stack,
+    Toolbar,
+    Typography,
+    useTheme
+} from "@mui/material";
 import { useEffect, useState } from "react";
 import CloseIcon from '@mui/icons-material/Close';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
@@ -6,13 +22,25 @@ import CropSquareIcon from '@mui/icons-material/CropSquare';
 import MenuIcon from '@mui/icons-material/Menu';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { Link, Outlet, useNavigate } from "react-router";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
-export default function AppBarLayout({ children }) {
+const drawerWidth = 260;
+
+export default function AppBarLayout() {
 
     const theme = useTheme();
     const [userInfo, setUserInfo] = useState(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const navigationItems = [
+        { label: 'Home', to: '/' },
+        { label: 'Clients', to: '/clients' },
+        { label: 'Surveys', to: '/surveys' },
+        { label: 'Events', to: '/events' },
+        { label: 'Analysis', to: '/analysis' }
+    ];
 
     useEffect(() => {
         async function fetchUserInfo() {
@@ -104,12 +132,53 @@ export default function AppBarLayout({ children }) {
         }
     `;
 
+    const drawerHeaderStyle = css`
+        padding: 1rem 1.25rem 0.75rem;
+    `;
+
+    const isRouteActive = (targetPath) => {
+        if (targetPath === '/') {
+            return location.pathname === '/';
+        }
+
+        return location.pathname === targetPath || location.pathname.startsWith(`${targetPath}/`);
+    };
+
+    const handleNavigateFromDrawer = (targetPath) => {
+        navigate(targetPath);
+        setDrawerOpen(false);
+    };
+
     return (
         <>
+        <Drawer
+            anchor="left"
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            ModalProps={{ keepMounted: true }}
+            PaperProps={{ sx: { width: drawerWidth } }}
+        >
+            <Box css={drawerHeaderStyle}>
+                <Typography variant="h6" fontWeight="bold">Navigation</Typography>
+                <Typography variant="body2" color="text.secondary">Move around the app.</Typography>
+            </Box>
+            <Divider />
+            <List sx={{ pt: 0.5 }}>
+                {navigationItems.map((item) => (
+                    <ListItemButton
+                        key={item.to}
+                        selected={isRouteActive(item.to)}
+                        onClick={() => handleNavigateFromDrawer(item.to)}
+                    >
+                        <ListItemText primary={item.label} />
+                    </ListItemButton>
+                ))}
+            </List>
+        </Drawer>
         <AppBar css={appBarStyle} position="fixed">
             <Toolbar>
                 <Stack css={menusStyle} direction="row" alignItems="center" justifyContent="start">
-                    <IconButton css={menuButtonStyle}><MenuIcon /></IconButton>
+                    <IconButton css={menuButtonStyle} onClick={() => setDrawerOpen(true)}><MenuIcon /></IconButton>
                     <IconButton css={arrowIconButtonStyle} onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
                     <IconButton css={arrowIconButtonStyle} onClick={() => navigate(1)}><ArrowForwardIcon /></IconButton>
                     <Button component={Link} to="/">Home</Button>
