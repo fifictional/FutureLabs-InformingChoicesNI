@@ -99,6 +99,14 @@ export const clients = sqliteTable('clients', {
   referenceId: text('reference_id').notNull().unique()
 });
 
+export const appSettings = sqliteTable('app_settings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  key: text('key').notNull().unique(),
+  valueText: text('value_text'),
+  valueNumber: integer('value_number').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+});
+
 export const statisticOverviews = sqliteTable('statistic_overviews', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),

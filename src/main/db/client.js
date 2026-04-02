@@ -36,6 +36,25 @@ function ensureCompatibility(sqlite) {
 
     backfillDisplayOrder();
   }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS clients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      non_confidential_identifier TEXT,
+      date_of_birth INTEGER,
+      reference_id TEXT NOT NULL UNIQUE
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE,
+      value_text TEXT,
+      value_number INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `);
 }
 
 function createDb() {

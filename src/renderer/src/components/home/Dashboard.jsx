@@ -19,20 +19,23 @@ import {
   Box,
   css,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   TextField,
-  MenuItem,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Stack
 } from '@mui/material';
-import { Edit, Refresh, Star, StarHalf, StarBorder } from '@mui/icons-material';
+import { Download, Edit, Refresh, Star, StarHalf, StarBorder } from '@mui/icons-material';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import QuestionSelectorDialog from '../analysis/QuestionSelectorDialog';
+import { exportElementAsPng } from '../../common/exportChartImage';
 
 const CONFIGURABLE_METRIC_NAMES = {
   avgSatisfaction: 'avg_satisfaction',
@@ -50,12 +53,9 @@ const METRIC_LABELS = {
   geographical_distribution: 'Geographical Distribution'
 };
 
-const REQUIREMENT_LABELS = {
-  number: 'Requires a numeric question.',
-  choice: 'Requires a choice question. Age bands come from the question choices.',
-  yes_no_choice: 'Requires a choice question that includes Yes and No options.',
-  choice_or_text: 'Requires a choice or text question.'
-};
+let cachedDashboardData = null;
+let cachedAppointmentsTotal = 0;
+
 
 const GEO_COORDINATES = {
   belfast: { lat: 54.5973, lng: -5.9301 },
@@ -109,40 +109,56 @@ const GEO_COORDINATES = {
 };
 
 export default function Dashboard() {
-  const [dashboardData, setDashboardData] = useState(null);
+  const navigate = useNavigate();
+  const [dashboardData, setDashboardData] = useState(() => cachedDashboardData);
+  const [totalAppointments, setTotalAppointments] = useState(() => cachedAppointmentsTotal);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [dateRangeStart, setDateRangeStart] = useState('');
+  const [dateRangeEnd, setDateRangeEnd] = useState('');
 
-  const [configOpen, setConfigOpen] = useState(false);
-  const [configMetricName, setConfigMetricName] = useState('');
-  const [configOptions, setConfigOptions] = useState([]);
-  const [configLoading, setConfigLoading] = useState(false);
-  const [configSaving, setConfigSaving] = useState(false);
-  const [configError, setConfigError] = useState('');
-  const [selectedFormId, setSelectedFormId] = useState('');
-  const [selectedQuestionId, setSelectedQuestionId] = useState('');
+
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectorSurveys, setSelectorSurveys] = useState([]);
+  const [selectorMetricName, setSelectorMetricName] = useState('');
+  const [selectorLoading, setSelectorLoading] = useState(false);
+  const [appointmentsDialogOpen, setAppointmentsDialogOpen] = useState(false);
+  const [appointmentsDraft, setAppointmentsDraft] = useState('0');
+  const [appointmentsSaving, setAppointmentsSaving] = useState(false);
+  const hasInitializedDateEffect = useRef(false);
 
   const metricConfigByName = useMemo(() => {
     const configs = dashboardData?.metricConfig || [];
     return new Map(configs.map((cfg) => [cfg.name, cfg]));
   }, [dashboardData]);
 
-  const selectedMetricConfig = metricConfigByName.get(configMetricName) || null;
-
-  const selectableQuestionsForSelectedForm = useMemo(() => {
-    const form = configOptions.find((f) => String(f.id) === String(selectedFormId));
-    return form?.questions || [];
-  }, [configOptions, selectedFormId]);
-
-  const selectedMetricLabel = METRIC_LABELS[configMetricName] || 'Metric';
 
   async function loadDashboardData() {
     setLoadingDashboard(true);
     setDashboardError('');
     try {
-      const data = await window.api.statistics.getDashboardOverviewData();
-      setDashboardData(data || null);
+      const [dashboardResult, appointmentsResult] = await Promise.allSettled([
+        window.api.statistics.getDashboardOverviewData({
+          startDate: dateRangeStart || null,
+          endDate: dateRangeEnd || null
+        }),
+        window.api.clients.getTotalAppointments()
+      ]);
+
+      if (dashboardResult.status !== 'fulfilled') {
+        throw dashboardResult.reason;
+      }
+
+      const nextData = dashboardResult.value || null;
+      setDashboardData(nextData);
+      cachedDashboardData = nextData;
+
+      if (appointmentsResult.status === 'fulfilled') {
+        const nextAppointments = Number(appointmentsResult.value || 0);
+        setTotalAppointments(nextAppointments);
+        cachedAppointmentsTotal = nextAppointments;
+      }
     } catch (error) {
       setDashboardError(error?.message || 'Failed to load dashboard data.');
     } finally {
@@ -163,60 +179,133 @@ export default function Dashboard() {
     }
   }
 
+
   async function openMetricConfig(metricName) {
-    setConfigError('');
-    setConfigMetricName(metricName);
-    setConfigOpen(true);
-    setConfigLoading(true);
+    setSelectorMetricName(metricName);
+    setSelectorOpen(true);
+    setSelectorLoading(true);
+    setSelectorSurveys([]);
 
     try {
-      const options = await window.api.statistics.listSelectableSurveyQuestions(metricName);
-      setConfigOptions(Array.isArray(options) ? options : []);
+      const [options, allForms, allEvents] = await Promise.all([
+        window.api.statistics.listSelectableSurveyQuestions(metricName),
+        window.api.forms.list(),
+        window.api.events.listWithSurveyCountsAndTags()
+      ]);
 
-      const metricConfig = metricConfigByName.get(metricName);
-      if (metricConfig?.selectedFormId && metricConfig?.questionId) {
-        setSelectedFormId(String(metricConfig.selectedFormId));
-        setSelectedQuestionId(String(metricConfig.questionId));
-      } else {
-        setSelectedFormId('');
-        setSelectedQuestionId('');
-      }
+      const formEventIdByFormId = new Map(
+        (Array.isArray(allForms) ? allForms : []).map((form) => [Number(form.id), Number(form.eventId)])
+      );
+
+      const eventById = new Map(
+        (Array.isArray(allEvents) ? allEvents : []).map((event) => [Number(event.id), event])
+      );
+
+      // API returns forms with questions; map each form directly to a selector survey.
+      const surveys = (Array.isArray(options) ? options : []).map((form) => {
+        const eventIdFromOption = Number(form.eventId);
+        const eventId = Number.isInteger(eventIdFromOption) && eventIdFromOption > 0
+          ? eventIdFromOption
+          : formEventIdByFormId.get(Number(form.id));
+        const eventMeta = eventById.get(Number(eventId));
+        const mergedEventTags = (form.eventTags || []).length
+          ? form.eventTags
+          : eventMeta?.tags || [];
+
+        return {
+        id: form.id,
+        name: form.name || `Survey ${form.id}`,
+        eventName: form.eventName || eventMeta?.name || 'Unknown event',
+        eventTags: mergedEventTags.map((tag) => String(tag).trim()).filter(Boolean),
+        questions: (form.questions || []).map((question) => ({
+          id: question.id,
+          text: question.text,
+          answerType: question.answerType
+        }))
+      };
+      });
+
+      setSelectorSurveys(surveys.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
-      setConfigError(error?.message || 'Failed to load survey/question options.');
-      setConfigOptions([]);
-      setSelectedFormId('');
-      setSelectedQuestionId('');
+      alert(error?.message || 'Failed to load survey/question options.');
     } finally {
-      setConfigLoading(false);
+      setSelectorLoading(false);
     }
   }
 
-  function closeMetricConfig() {
-    setConfigOpen(false);
-    setConfigMetricName('');
-    setConfigOptions([]);
-    setConfigError('');
-    setSelectedFormId('');
-    setSelectedQuestionId('');
+  function handleQuestionSelected(surveyId, question) {
+    setSelectorOpen(false);
+    saveMetricConfig(selectorMetricName, surveyId, question);
   }
 
-  async function saveMetricConfig() {
-    if (!selectedQuestionId) {
-      setConfigError('Please choose a question first.');
+  async function saveMetricConfig(metricName, surveyId, selectedQuestion) {
+    if (!selectedQuestion) {
+      alert('Please choose a question first.');
       return;
     }
 
-    setConfigSaving(true);
-    setConfigError('');
-
     try {
-      await window.api.statistics.setMetricQuestion(configMetricName, Number(selectedQuestionId));
+      const liveQuestions = await window.api.questions.listByForm(Number(surveyId));
+      const selectedQuestionId = Number(selectedQuestion.id);
+
+      // Prefer exact ID match; fallback to text+answerType when IDs are stale/mismatched.
+      const resolvedQuestion = (Array.isArray(liveQuestions) ? liveQuestions : []).find((question) => {
+        if (Number(question.id) === selectedQuestionId) {
+          return true;
+        }
+
+        return (
+          String(question.text || '').trim() === String(selectedQuestion.text || '').trim() &&
+          String(question.answerType || '').trim() ===
+            String(selectedQuestion.answerType || '').trim()
+        );
+      });
+
+      if (!resolvedQuestion?.id) {
+        alert('Selected question no longer exists in this survey. Please pick another question.');
+        return;
+      }
+
+      await window.api.statistics.setMetricQuestion(metricName, Number(resolvedQuestion.id));
       await loadDashboardData();
-      closeMetricConfig();
     } catch (error) {
-      setConfigError(error?.message || 'Failed to save metric configuration.');
+      alert(error?.message || 'Failed to save metric configuration.');
+    }
+  }
+
+  function openAppointmentsDialog() {
+    setAppointmentsDraft(String(totalAppointments || 0));
+    setAppointmentsDialogOpen(true);
+  }
+
+  async function setAppointmentsTotal(nextValue) {
+    setAppointmentsSaving(true);
+    try {
+      const updatedValue = await window.api.clients.setTotalAppointments(nextValue);
+      const normalizedValue = Number(updatedValue || 0);
+      setTotalAppointments(normalizedValue);
+      cachedAppointmentsTotal = normalizedValue;
+      setAppointmentsDraft(String(normalizedValue));
+      setAppointmentsDialogOpen(false);
+    } catch (error) {
+      alert(error?.message || 'Failed to save total appointments.');
     } finally {
-      setConfigSaving(false);
+      setAppointmentsSaving(false);
+    }
+  }
+
+  async function adjustAppointments(delta) {
+    setAppointmentsSaving(true);
+    try {
+      const updatedValue = await window.api.clients.adjustTotalAppointments(delta);
+      const normalizedValue = Number(updatedValue || 0);
+      setTotalAppointments(normalizedValue);
+      cachedAppointmentsTotal = normalizedValue;
+      setAppointmentsDraft(String(normalizedValue));
+    } catch (error) {
+      alert(error?.message || 'Failed to update total appointments.');
+    } finally {
+      setAppointmentsSaving(false);
     }
   }
 
@@ -226,13 +315,16 @@ export default function Dashboard() {
   const totalUnidentifiedUsers = Number(dashboardData?.totalUnidentifiedUsers || 0);
 
   useEffect(() => {
-      const loadDataAndRefresh = async () => {
-          await loadDashboardData();
-          await refreshAllSurveysAndDashboard();
-      };
-
-        loadDataAndRefresh();
+    refreshAllSurveysAndDashboard();
   }, []);
+
+  useEffect(() => {
+    if (!hasInitializedDateEffect.current) {
+      hasInitializedDateEffect.current = true;
+      return;
+    }
+    loadDashboardData();
+  }, [dateRangeStart, dateRangeEnd]);
 
   const avgMetric = dashboardData?.metricData?.[CONFIGURABLE_METRIC_NAMES.avgSatisfaction] || {};
   const improvedMetric = dashboardData?.metricData?.[CONFIGURABLE_METRIC_NAMES.improved] || {};
@@ -305,16 +397,16 @@ export default function Dashboard() {
     padding: 2rem;
   `;
 
-  const TitleWithEdit = ({ title, metricName }) => (
+  const TitleWithEdit = ({ title, metricName, onEdit }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
       <Typography color="text.secondary" fontSize={12}>
         {title}
       </Typography>
-      {metricName ? (
+      {metricName || onEdit ? (
         <IconButton
           size="small"
           aria-label={`Configure ${title}`}
-          onClick={() => openMetricConfig(metricName)}
+          onClick={() => (onEdit ? onEdit() : openMetricConfig(metricName))}
         >
           <Edit fontSize="inherit" />
         </IconButton>
@@ -322,33 +414,61 @@ export default function Dashboard() {
     </Box>
   );
 
-  const SmallStatisticCard = ({ title, metricName, children }) => {
+  const SmallStatisticCard = ({ title, metricName, onEdit, children }) => {
     return (
       <Card elevation={2} sx={{ flex: 1 }}>
         <CardContent sx={{ p: 2 }}>
-          <TitleWithEdit title={title} metricName={metricName} />
+          <TitleWithEdit title={title} metricName={metricName} onEdit={onEdit} />
           {children}
         </CardContent>
       </Card>
     )}
 
   const ChartCard = ({ title, metricName, children }) => {
+    const cardRef = useRef(null);
+    const [exporting, setExporting] = useState(false);
+
+    const handleExport = async () => {
+      if (!cardRef.current || exporting) {
+        return;
+      }
+
+      setExporting(true);
+      try {
+        await exportElementAsPng(cardRef.current, title);
+      } catch (error) {
+        alert(error?.message || 'Failed to export chart image.');
+      } finally {
+        setExporting(false);
+      }
+    };
+
     return (
-      <Card elevation={2} sx={{ flex: 1, width: '50%' }}>
+      <Card ref={cardRef} elevation={2} sx={{ flex: 1, width: '50%' }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" fontWeight="bold">
               {title}
             </Typography>
-            {metricName ? (
+            <Stack direction="row" spacing={0.5}>
               <IconButton
                 size="small"
-                aria-label={`Configure ${title}`}
-                onClick={() => openMetricConfig(metricName)}
+                aria-label={`Export ${title} as image`}
+                onClick={handleExport}
+                disabled={exporting}
               >
-                <Edit fontSize="inherit" />
+                {exporting ? <CircularProgress size={16} /> : <Download fontSize="inherit" />}
               </IconButton>
-            ) : null}
+              {metricName ? (
+                <IconButton
+                  size="small"
+                  aria-label={`Configure ${title}`}
+                  onClick={() => openMetricConfig(metricName)}
+                >
+                  <Edit fontSize="inherit" />
+                </IconButton>
+              ) : null}
+            </Stack>
           </Box>
           {children}
         </CardContent>
@@ -372,7 +492,31 @@ export default function Dashboard() {
     <Box css={dashboardBackgroundStyle}>
       <Box css={dashboardContainerStyle}>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ flex: 1 }}>
+            <TextField
+              label="Start date"
+              type="date"
+              value={dateRangeStart}
+              onChange={(e) => setDateRangeStart(e.target.value || '')}
+              slotProps={{ inputLabel: { shrink: true } }}
+              size="small"
+            />
+            <TextField
+              label="End date"
+              type="date"
+              value={dateRangeEnd}
+              onChange={(e) => setDateRangeEnd(e.target.value || '')}
+              slotProps={{ inputLabel: { shrink: true } }}
+              size="small"
+            />
+          </Stack>
+          <Button
+            variant="outlined"
+            onClick={() => navigate('/clients')}
+          >
+            Clients
+          </Button>
           <Button
             variant="outlined"
             startIcon={refreshingAll ? <CircularProgress size={14} /> : <Refresh />}
@@ -389,6 +533,11 @@ export default function Dashboard() {
           <SmallStatisticCard title="Total Feedback Received">
             <Typography variant="h4" fontWeight="bold">
               {totalSubmissions}
+            </Typography>
+          </SmallStatisticCard>
+          <SmallStatisticCard title="Total Appointments" onEdit={openAppointmentsDialog}>
+            <Typography variant="h4" fontWeight="bold">
+              {totalAppointments}
             </Typography>
           </SmallStatisticCard>
           <SmallStatisticCard
@@ -536,62 +685,51 @@ export default function Dashboard() {
       </Box>
     </Box>
 
-    <Dialog open={configOpen} onClose={configSaving ? undefined : closeMetricConfig} fullWidth maxWidth="sm">
-      <DialogTitle>Configure {selectedMetricLabel}</DialogTitle>
+    <QuestionSelectorDialog
+      open={selectorOpen}
+      surveys={selectorSurveys}
+      loading={selectorLoading}
+      onClose={() => setSelectorOpen(false)}
+      onSelectQuestion={handleQuestionSelected}
+      questionFilter="all"
+      title={`Configure ${METRIC_LABELS[selectorMetricName] || 'Metric'}`}
+    />
+
+    <Dialog open={appointmentsDialogOpen} onClose={appointmentsSaving ? undefined : () => setAppointmentsDialogOpen(false)} maxWidth="xs" fullWidth>
+      <DialogTitle>Edit Total Appointments</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Pick a survey first, then select the question this metric should use. Data from all surveys with
-          the same question text will be included.
-        </Typography>
-
-        {selectedMetricConfig ? (
-          <Typography variant="caption" display="block" sx={{ mb: 2 }}>
-            {REQUIREMENT_LABELS[selectedMetricConfig.requirement] || ''}
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Adjust the running appointments total manually.
           </Typography>
-        ) : null}
-
-        <TextField
-          select
-          margin="dense"
-          label="Survey"
-          fullWidth
-          value={selectedFormId}
-          onChange={(e) => {
-            setSelectedFormId(e.target.value);
-            setSelectedQuestionId('');
-          }}
-          disabled={configLoading || configSaving}
-        >
-          {configOptions.map((form) => (
-            <MenuItem key={form.id} value={String(form.id)}>
-              {form.name}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          margin="dense"
-          label="Question"
-          fullWidth
-          value={selectedQuestionId}
-          onChange={(e) => setSelectedQuestionId(e.target.value)}
-          disabled={!selectedFormId || configLoading || configSaving}
-        >
-          {selectableQuestionsForSelectedForm.map((question) => (
-            <MenuItem key={question.id} value={String(question.id)}>
-              {question.text}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        {configError ? <Alert severity="error" sx={{ mt: 2 }}>{configError}</Alert> : null}
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={() => adjustAppointments(-1)} disabled={appointmentsSaving || totalAppointments <= 0}>
+              -1
+            </Button>
+            <Button variant="outlined" onClick={() => adjustAppointments(1)} disabled={appointmentsSaving}>
+              +1
+            </Button>
+            <Button variant="outlined" onClick={() => adjustAppointments(5)} disabled={appointmentsSaving}>
+              +5
+            </Button>
+          </Stack>
+          <TextField
+            label="Set exact total"
+            type="number"
+            value={appointmentsDraft}
+            onChange={(event) => setAppointmentsDraft(event.target.value || '0')}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+            fullWidth
+          />
+        </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={closeMetricConfig} disabled={configSaving}>
-          Cancel
-        </Button>
-        <Button onClick={saveMetricConfig} variant="contained" disabled={configLoading || configSaving}>
+        <Button onClick={() => setAppointmentsDialogOpen(false)} disabled={appointmentsSaving}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={() => setAppointmentsTotal(Number(appointmentsDraft || 0))}
+          disabled={appointmentsSaving}
+        >
           Save
         </Button>
       </DialogActions>

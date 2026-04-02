@@ -34,6 +34,7 @@
     "d3-cloud": "^1.2.9",
     "drizzle-orm": "^0.45.1",
     "google-auth-library": "^10.6.1",
+    "html-to-image": "^1.11.13",
     "leaflet": "^1.9.4",
     "react-leaflet": "^5.0.0",
     "react-router": "^7.13.1",

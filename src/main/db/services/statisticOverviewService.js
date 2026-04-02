@@ -1,6 +1,9 @@
-import { and, count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import { getDb } from '../client';
 import {
+  events,
+  eventTagMappings,
+  eventTags,
   forms,
   questionChoice,
   questions,
@@ -78,8 +81,33 @@ function parseSchemaValue(schemaValue) {
   }
 }
 
-async function listSubmissionReferenceRows() {
+function normalizeDashboardFilters(filters) {
+  const startRaw = String(filters?.startDate || '').trim();
+  const endRaw = String(filters?.endDate || '').trim();
+
+  const startDate = startRaw ? new Date(`${startRaw}T00:00:00.000Z`) : null;
+  const endDate = endRaw ? new Date(`${endRaw}T23:59:59.999Z`) : null;
+
+  return {
+    startDate: startDate && !Number.isNaN(startDate.getTime()) ? startDate : null,
+    endDate: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null
+  };
+}
+
+function buildSubmittedAtWhere(submittedAtColumn, filters) {
+  const conditions = [];
+  if (filters?.startDate) conditions.push(gte(submittedAtColumn, filters.startDate));
+  if (filters?.endDate) conditions.push(lte(submittedAtColumn, filters.endDate));
+
+  if (conditions.length === 0) return undefined;
+  if (conditions.length === 1) return conditions[0];
+  return and(...conditions);
+}
+
+async function listSubmissionReferenceRows(filters = {}) {
   const db = getDb();
+  const submittedAtWhere = buildSubmittedAtWhere(submissions.submittedAt, filters);
+
   const submissionRows = await db
     .select({
       submissionId: submissions.id,
@@ -88,13 +116,15 @@ async function listSubmissionReferenceRows() {
       formSchema: forms.schema
     })
     .from(submissions)
-    .leftJoin(forms, eq(forms.id, submissions.formId));
+    .leftJoin(forms, eq(forms.id, submissions.formId))
+    .where(submittedAtWhere);
 
   let storedReferenceRows = [];
   try {
     storedReferenceRows = await db
       .select({ submissionId: submissions.id, userReferenceId: submissions.userReferenceId })
-      .from(submissions);
+      .from(submissions)
+      .where(submittedAtWhere);
   } catch {
     storedReferenceRows = [];
   }
@@ -408,9 +438,28 @@ export async function listSelectableSurveyQuestions(metricName) {
   }
 
   const db = getDb();
+
+  const eventTagsAgg = db
+    .select({
+      eventId: eventTagMappings.eventId,
+      tagsCsv: sql`group_concat(${eventTags.name}, ',')`.as('tagsCsv')
+    })
+    .from(eventTagMappings)
+    .innerJoin(eventTags, eq(eventTags.id, eventTagMappings.tagId))
+    .groupBy(eventTagMappings.eventId)
+    .as('event_tags_agg');
+
   const allForms = await db
-    .select({ id: forms.id, name: forms.name, provider: forms.provider })
+    .select({
+      id: forms.id,
+      name: forms.name,
+      provider: forms.provider,
+      eventName: events.name,
+      tagsCsv: eventTagsAgg.tagsCsv
+    })
     .from(forms)
+    .leftJoin(events, eq(events.id, forms.eventId))
+    .leftJoin(eventTagsAgg, eq(eventTagsAgg.eventId, forms.eventId))
     .orderBy(forms.name);
 
   const allQuestions = await db
@@ -440,6 +489,13 @@ export async function listSelectableSurveyQuestions(metricName) {
   return allForms
     .map((form) => ({
       ...form,
+      eventName: form.eventName || null,
+      eventTags: form.tagsCsv
+        ? String(form.tagsCsv)
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [],
       questions: (questionsByForm.get(form.id) || []).sort((a, b) =>
         String(a.text).localeCompare(String(b.text))
       )
@@ -515,15 +571,21 @@ export async function setOverviewMetricQuestion(metricName, questionId) {
   };
 }
 
-export async function getDashboardOverviewData() {
+export async function getDashboardOverviewData(rawFilters = {}) {
   await ensureMetricRows();
 
   const db = getDb();
+  const filters = normalizeDashboardFilters(rawFilters);
+  const submittedAtWhere = buildSubmittedAtWhere(submissions.submittedAt, filters);
 
-  const totalFeedbackRow = await db.select({ count: count() }).from(submissions).get();
+  const totalFeedbackRow = await db
+    .select({ count: count() })
+    .from(submissions)
+    .where(submittedAtWhere)
+    .get();
   const totalFeedbackReceived = Number(totalFeedbackRow?.count || 0);
 
-  const identifiedRows = await listSubmissionReferenceRows();
+  const identifiedRows = await listSubmissionReferenceRows(filters);
 
   const totalUniqueReferences = new Set();
   let unidentifiedSubmissionCount = 0;
@@ -581,6 +643,10 @@ export async function getDashboardOverviewData() {
       continue;
     }
 
+    const metricResponseConditions = [inArray(responses.questionId, matchingIds)];
+    const responsesSubmittedAtWhere = buildSubmittedAtWhere(submissions.submittedAt, filters);
+    if (responsesSubmittedAtWhere) metricResponseConditions.push(responsesSubmittedAtWhere);
+
     const metricResponses = await db
       .select({
         valueText: responses.valueText,
@@ -588,7 +654,8 @@ export async function getDashboardOverviewData() {
         valueChoice: responses.valueChoice
       })
       .from(responses)
-      .where(inArray(responses.questionId, matchingIds));
+      .innerJoin(submissions, eq(submissions.id, responses.submissionId))
+      .where(and(...metricResponseConditions));
 
     if (metric.name === 'avg_satisfaction') {
       const values = metricResponses

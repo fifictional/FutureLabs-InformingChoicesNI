@@ -113,6 +113,7 @@ export default function AppBarLayout({ children }) {
                     <IconButton css={arrowIconButtonStyle} onClick={() => navigate(-1)}><ArrowBackIcon /></IconButton>
                     <IconButton css={arrowIconButtonStyle} onClick={() => navigate(1)}><ArrowForwardIcon /></IconButton>
                     <Button component={Link} to="/">Home</Button>
+                    <Button component={Link} to="clients">Clients</Button>
                     <Button component={Link} to="surveys">Surveys</Button>
                     <Button component={Link} to="events">Events</Button>
                     <Button component={Link} to="analysis">Analysis</Button>

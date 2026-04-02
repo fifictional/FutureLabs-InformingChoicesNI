@@ -59,7 +59,17 @@ const api = {
       ipcRenderer.invoke('statistics:listSelectableSurveyQuestions', metricName),
     setMetricQuestion: (metricName, questionId) =>
       ipcRenderer.invoke('statistics:setMetricQuestion', metricName, questionId),
-    getDashboardOverviewData: () => ipcRenderer.invoke('statistics:getDashboardOverviewData')
+    getDashboardOverviewData: (filters) =>
+      ipcRenderer.invoke('statistics:getDashboardOverviewData', filters)
+  },
+  clients: {
+    list: () => ipcRenderer.invoke('clients:list'),
+    create: (data) => ipcRenderer.invoke('clients:create', data),
+    update: (id, data) => ipcRenderer.invoke('clients:update', id, data),
+    delete: (id) => ipcRenderer.invoke('clients:delete', id),
+    getTotalAppointments: () => ipcRenderer.invoke('clients:getTotalAppointments'),
+    setTotalAppointments: (value) => ipcRenderer.invoke('clients:setTotalAppointments', value),
+    adjustTotalAppointments: (delta) => ipcRenderer.invoke('clients:adjustTotalAppointments', delta)
   },
   charts: {
     list: () => ipcRenderer.invoke('charts:list'),

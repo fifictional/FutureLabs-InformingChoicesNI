@@ -11,6 +11,7 @@ import * as questionService from './db/services/questionService';
 import * as submissionService from './db/services/submissionService';
 import * as responseService from './db/services/responseService';
 import * as statisticOverviewService from './db/services/statisticOverviewService';
+import * as clientService from './db/services/clientService.js';
 import * as chartService from './db/services/chartService.js';
 import icon from '../../resources/icon.png?asset';
 import { listGoogleForms } from './common/google-forms/google-drive.js';
@@ -189,8 +190,20 @@ ipcMain.handle('statistics:listSelectableSurveyQuestions', (_event, metricName) 
 ipcMain.handle('statistics:setMetricQuestion', (_event, metricName, questionId) =>
   statisticOverviewService.setOverviewMetricQuestion(metricName, questionId)
 );
-ipcMain.handle('statistics:getDashboardOverviewData', () =>
-  statisticOverviewService.getDashboardOverviewData()
+ipcMain.handle('statistics:getDashboardOverviewData', (_event, filters) =>
+  statisticOverviewService.getDashboardOverviewData(filters)
+);
+
+ipcMain.handle('clients:list', () => clientService.listClients());
+ipcMain.handle('clients:create', (_event, data) => clientService.createClient(data));
+ipcMain.handle('clients:update', (_event, id, data) => clientService.updateClient(id, data));
+ipcMain.handle('clients:delete', (_event, id) => clientService.deleteClient(id));
+ipcMain.handle('clients:getTotalAppointments', () => clientService.getTotalAppointments());
+ipcMain.handle('clients:setTotalAppointments', (_event, value) =>
+  clientService.setTotalAppointments(value)
+);
+ipcMain.handle('clients:adjustTotalAppointments', (_event, delta) =>
+  clientService.adjustTotalAppointments(delta)
 );
 
 // charts

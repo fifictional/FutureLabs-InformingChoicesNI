@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  LinearProgress,
   List,
   ListItemButton,
   ListItemText,
@@ -101,11 +102,29 @@ export default function QuestionSelectorDialog({
           }
 
           return (
-            <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', py: 0.5 }}>
-              {tags.map((tag) => (
-                <Chip key={`${params.row.id}-${tag}`} label={tag} size="small" variant="outlined" />
-              ))}
-            </Stack>
+            <Box
+              sx={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  rowGap: 0.5,
+                  width: '100%'
+                }}
+              >
+                {tags.map((tag) => (
+                  <Chip key={`${params.row.id}-${tag}`} label={tag} size="small" variant="outlined" />
+                ))}
+              </Stack>
+            </Box>
           );
         }
       }
@@ -136,6 +155,15 @@ export default function QuestionSelectorDialog({
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+          {loading ? (
+            <Stack spacing={0.75}>
+              <LinearProgress />
+              <Typography variant="caption" color="text.secondary">
+                Loading surveys and questions...
+              </Typography>
+            </Stack>
+          ) : null}
+
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
             <Autocomplete
               multiple

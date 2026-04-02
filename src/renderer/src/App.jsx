@@ -6,6 +6,7 @@ import Surveys from "./pages/Surveys";
 import Analysis from "./pages/Analysis";
 import ConfigureChart from "./pages/ConfigureChart";
 import Events from "./pages/Events";
+import Clients from "./pages/Clients";
 import ViewSurveyData from "./pages/ViewSurveyData";
 import ExcelImportPage from "./pages/ExcelImportPage";
 import GoogleFormsImportPage from "./pages/GoogleFormsImportPage";
@@ -30,6 +31,7 @@ function App() {
               <Route path="configure-chart/:chartId" element={<ConfigureChart />} />
             </Route>
             <Route path="events" element={<Events />} />
+            <Route path="clients" element={<Clients />} />
           </Route>
         </Route>
       </Routes>

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 
-import { Add, Delete, DragIndicator, Edit, Refresh } from '@mui/icons-material';
+import { Add, Delete, Download, DragIndicator, Edit, Refresh } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -19,7 +19,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import ContainerWithBackground from '../components/common/ContainerWithBackground';
 import {
@@ -45,6 +45,7 @@ import {
   normalizeGeoSettings,
   selectionCoversSurveyIds
 } from '../common/geoUtils.js';
+import { exportElementAsPng } from '../common/exportChartImage.js';
 
 function toDateMs(value) {
   if (!value) return null;
@@ -229,6 +230,7 @@ function SavedChartDisplay({
   isDropTarget = false,
   disableDragging = false
 }) {
+  const chartCardRef = useRef(null);
   const [dateRangeStart, setDateRangeStart] = useState(chart.configuration?.startDate || '');
   const [dateRangeEnd, setDateRangeEnd] = useState(chart.configuration?.endDate || '');
   const [trendSettings, setTrendSettings] = useState(() =>
@@ -240,6 +242,7 @@ function SavedChartDisplay({
   });
   // drilldown: { axis: 'row'|'col', label: string } | null
   const [drilldown, setDrilldown] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const surveyLookup = Object.fromEntries(surveys.map((survey) => [survey.id, survey]));
   const trendChoiceOptions = collectChoiceOptionsForSelection(chart.configuration?.questionA, surveyLookup);
   const geoChoiceOptions = collectChoiceOptionsForSelection(chart.configuration?.questionB, surveyLookup);
@@ -723,6 +726,21 @@ function SavedChartDisplay({
 
   const formattedDate = new Date(chart.updatedAt).toLocaleDateString();
 
+  const handleExport = async () => {
+    if (!chartCardRef.current || exporting) {
+      return;
+    }
+
+    setExporting(true);
+    try {
+      await exportElementAsPng(chartCardRef.current, chart.name);
+    } catch (error) {
+      alert(error?.message || 'Failed to export chart image.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Box
       onDragOver={(event) => onDragOver?.(event, chart.id)}
@@ -735,6 +753,7 @@ function SavedChartDisplay({
       }}
     >
       <Card
+        ref={chartCardRef}
         sx={{
           height: '100%',
           border: '1px solid',
@@ -778,6 +797,14 @@ function SavedChartDisplay({
               </Stack>
             </Stack>
             <Stack direction="row" spacing={0.5}>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                {exporting ? <Refresh fontSize="small" /> : <Download fontSize="small" />}
+              </IconButton>
               <IconButton
                 size="small"
                 color="primary"
