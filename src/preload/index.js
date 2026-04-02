@@ -61,6 +61,15 @@ const api = {
       ipcRenderer.invoke('statistics:setMetricQuestion', metricName, questionId),
     getDashboardOverviewData: () => ipcRenderer.invoke('statistics:getDashboardOverviewData')
   },
+  charts: {
+    list: () => ipcRenderer.invoke('charts:list'),
+    findById: (id) => ipcRenderer.invoke('charts:findById', id),
+    create: (data) => ipcRenderer.invoke('charts:create', data),
+    update: (id, data) => ipcRenderer.invoke('charts:update', id, data),
+    delete: (id) => ipcRenderer.invoke('charts:delete', id),
+    reorder: (chartIds) => ipcRenderer.invoke('charts:reorder', chartIds),
+    parseConfiguration: (chart) => ipcRenderer.invoke('charts:parseConfiguration', chart)
+  },
   googleForms: {
     list: (pageToken) => ipcRenderer.invoke('googleForms:list', pageToken),
     create: (title, document_title) =>

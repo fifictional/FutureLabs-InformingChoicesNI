@@ -1,3 +1,20 @@
+CREATE TABLE `charts` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text NOT NULL,
+	`chart_type` text NOT NULL,
+	`configuration` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `clients` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`non_confidential_identifier` text,
+	`date_of_birth` integer,
+	`reference_id` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `clients_reference_id_unique` ON `clients` (`reference_id`);--> statement-breakpoint
 CREATE TABLE `event_tag_mappings` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`event_id` integer NOT NULL,
@@ -72,6 +89,7 @@ CREATE UNIQUE INDEX `statistic_overviews_name_unique` ON `statistic_overviews` (
 CREATE TABLE `submissions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`form_id` integer NOT NULL,
+	`user_reference_id` text,
 	`submitted_at` integer NOT NULL,
 	`external_id` text NOT NULL,
 	FOREIGN KEY (`form_id`) REFERENCES `forms`(`id`) ON UPDATE no action ON DELETE cascade

@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 
 import {
+  Autocomplete,
   Box,
   Chip,
   Dialog,
@@ -11,32 +12,78 @@ import {
   ListItemButton,
   ListItemText,
   Stack,
+  TextField,
   Typography
 } from '@mui/material';
-import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { useMemo, useState } from 'react';
+import { DataGrid } from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function QuestionSelectorDialog({
   open,
   surveys,
+  loading = false,
   onClose,
   onSelectQuestion,
   questionFilter = 'all',
   title = 'Select a Question'
 }) {
   const [selectedSurveyId, setSelectedSurveyId] = useState(null);
+  const [eventFilters, setEventFilters] = useState([]);
+  const [tagFilters, setTagFilters] = useState([]);
 
-  const rows = useMemo(
+  const normalizedSurveys = useMemo(
     () =>
       surveys.map((survey) => ({
-        id: survey.id,
-        title: survey.name,
+        ...survey,
         event: survey.eventName || 'Unknown event',
-        eventTags: survey.eventTags,
-        eventTagsText: survey.eventTags.join(', ')
+        normalizedTags: (survey.eventTags || []).map((tag) => String(tag).trim()).filter(Boolean)
       })),
     [surveys]
   );
+
+  const eventOptions = useMemo(
+    () => [...new Set(normalizedSurveys.map((survey) => survey.event))].sort((a, b) => a.localeCompare(b)),
+    [normalizedSurveys]
+  );
+
+  const tagOptions = useMemo(
+    () =>
+      [...new Set(normalizedSurveys.flatMap((survey) => survey.normalizedTags))].sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [normalizedSurveys]
+  );
+
+  useEffect(() => {
+    setEventFilters((previous) => previous.filter((eventName) => eventOptions.includes(eventName)));
+  }, [eventOptions]);
+
+  useEffect(() => {
+    setTagFilters((previous) => previous.filter((tag) => tagOptions.includes(tag)));
+  }, [tagOptions]);
+
+  const rows = useMemo(() => {
+    const filtered = normalizedSurveys.filter((survey) => {
+      if (eventFilters.length > 0 && !eventFilters.includes(survey.event)) {
+        return false;
+      }
+      if (tagFilters.length > 0 && !tagFilters.some((tag) => survey.normalizedTags.includes(tag))) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return filtered
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((survey) => ({
+      id: survey.id,
+      title: survey.name,
+      event: survey.event,
+      eventTags: survey.normalizedTags,
+      eventTagsText: survey.normalizedTags.join(', ')
+    }));
+  }, [eventFilters, normalizedSurveys, tagFilters]);
 
   const columns = useMemo(
     () => [
@@ -88,17 +135,48 @@ export default function QuestionSelectorDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 0.5 }}>
-          <Box sx={{ flex: 1.4, minWidth: 0 }}>
+        <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+            <Autocomplete
+              multiple
+              size="small"
+              options={eventOptions}
+              value={eventFilters}
+              onChange={(_event, nextValue) => setEventFilters(nextValue)}
+              disableCloseOnSelect
+              disabled={loading}
+              renderInput={(params) => <TextField {...params} label="Events" />}
+              sx={{ flex: 1 }}
+            />
+            <Autocomplete
+              multiple
+              size="small"
+              options={tagOptions}
+              value={tagFilters}
+              onChange={(_event, nextValue) => setTagFilters(nextValue)}
+              disableCloseOnSelect
+              disabled={loading}
+              renderInput={(params) => <TextField {...params} label="Event tags" />}
+              sx={{ flex: 1 }}
+            />
+          </Stack>
+
+          <Typography variant="caption" color="text.secondary">
+            Showing {rows.length} of {surveys.length} surveys
+          </Typography>
+
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <Box sx={{ flex: 1.4, minWidth: 0, height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <DataGrid
               rows={rows}
               columns={columns}
-              autoHeight
               disableRowSelectionOnClick
-              hideFooter
-              slots={{ toolbar: GridToolbar }}
-              slotProps={{ toolbar: { showQuickFilter: true } }}
+              pagination
+              pageSizeOptions={[10]}
+              initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+              loading={loading}
               onRowClick={(params) => setSelectedSurveyId(params.row.id)}
+              sx={{ border: 'none', opacity: loading ? 0.7 : 1 }}
             />
           </Box>
 
@@ -121,12 +199,14 @@ export default function QuestionSelectorDialog({
                 <ListItemButton
                   key={`${selectedSurvey.id}-${question.id}`}
                   onClick={() => onSelectQuestion(selectedSurvey.id, question)}
+                  disabled={loading}
                 >
                   <ListItemText primary={question.text} />
                 </ListItemButton>
               ))}
             </List>
           </Stack>
+        </Stack>
         </Stack>
       </DialogContent>
     </Dialog>
