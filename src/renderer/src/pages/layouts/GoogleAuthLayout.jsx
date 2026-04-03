@@ -3,6 +3,15 @@ import { Outlet } from "react-router";
 import { Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
 import SkeletonAppBar from "../../components/skeletons/SkeletonAppBar";
 
+function resolveAuthErrorMessage(err) {
+    const message = err?.message || '';
+    if (message.includes('No Google credentials were found') || err?.code === 'GOOGLE_CREDENTIALS_MISSING') {
+        return 'No Google credentials found. Please add credentials/credentials.json and restart the app.';
+    }
+
+    return 'Error checking Google authentication: ' + (message || 'Unknown error');
+}
+
 export default function GoogleAuthLayout() {
     const [isAuthenticated, setIsAuthenticated] = useState(null);
     const [error, setError] = useState(null);
@@ -13,23 +22,34 @@ export default function GoogleAuthLayout() {
             try {
                 const authenticated = await window.api.googleAuth.isUserAuthenticated();
                 setIsAuthenticated(authenticated);
+                if (!authenticated) {
+                    setError(null);
+                }
             } catch (err) {
-                setError('Error checking Google authentication: ' + err.message);
+                setIsAuthenticated(false);
+                setError(resolveAuthErrorMessage(err));
             }
         }
         checkAuth();
     }, []);
 
     const handleLoginClick = async () => {
-        setWaitingLogin(true);
-        const response = await window.api.googleAuth.ensureAuthenticated();
-        setWaitingLogin(false);
-        if (response === true) {
-            setIsAuthenticated(true);
-            setError(null);
-        } else {
+        try {
+            setWaitingLogin(true);
+            const response = await window.api.googleAuth.ensureAuthenticated();
+            if (response === true) {
+                setIsAuthenticated(true);
+                setError(null);
+                return;
+            }
+
             setIsAuthenticated(false);
             setError('Google authentication failed, contact developers if this issue persists.');
+        } catch (err) {
+            setIsAuthenticated(false);
+            setError(resolveAuthErrorMessage(err));
+        } finally {
+            setWaitingLogin(false);
         }
     }
 
@@ -49,7 +69,7 @@ export default function GoogleAuthLayout() {
                     <DialogTitle>Authentication Error</DialogTitle>
                     <DialogContent>
                         <p>{error}</p>
-                        <p>Please try again. If the issue persists, contact the developers.</p>
+                        <p>Please add the credentials file and restart the app, then try again.</p>
                     </DialogContent>
                     <DialogActions>
                         <Button variant="contained" onClick={handleLoginClick}>

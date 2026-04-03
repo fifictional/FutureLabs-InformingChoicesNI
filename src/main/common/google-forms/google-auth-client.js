@@ -7,6 +7,7 @@ import {
   runInteractiveOAuthFlow,
   saveEncryptedToken
 } from './google-oauth-common';
+import { hasCredentialFiles } from './credential-store';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
@@ -15,6 +16,20 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
   'openid'
 ];
+
+function throwMissingCredentialsError() {
+  const error = new Error(
+    'No Google credentials were found. Please add credentials/credentials.json in the app data folder before signing in.'
+  );
+  error.code = 'GOOGLE_CREDENTIALS_MISSING';
+  throw error;
+}
+
+function assertCredentialsAvailable() {
+  if (!hasCredentialFiles()) {
+    throwMissingCredentialsError();
+  }
+}
 
 function getTokenFilePath() {
   const tokenRelativePath = getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH);
@@ -46,6 +61,8 @@ async function getNewTokenInteractive() {
 }
 
 export async function getGoogleAuthClient() {
+  assertCredentialsAvailable();
+
   const savedToken = readSavedGoogleToken();
   if (savedToken) {
     const client = createOAuthClient();
@@ -57,6 +74,8 @@ export async function getGoogleAuthClient() {
 }
 
 export async function isUserAuthenticated() {
+  assertCredentialsAvailable();
+
   const savedToken = readSavedGoogleToken();
   if (savedToken) {
     const client = createOAuthClient();
@@ -74,6 +93,8 @@ export async function isUserAuthenticated() {
 
 export async function ensureAuthenticated() {
   try {
+    assertCredentialsAvailable();
+
     const authenticated = await isUserAuthenticated();
     if (authenticated) {
       return true;
