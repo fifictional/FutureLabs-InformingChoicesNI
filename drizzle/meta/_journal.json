@@ -15,6 +15,13 @@
       "when": 1775155200000,
       "tag": "0001_chart_display_order",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1775208394057,
+      "tag": "0002_absent_shooting_star",
+      "breakpoints": true
     }
   ]
 }
