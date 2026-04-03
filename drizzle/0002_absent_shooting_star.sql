@@ -1,4 +1,4 @@
-CREATE TABLE `app_settings` (
+CREATE TABLE IF NOT EXISTS `app_settings` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`key` text NOT NULL,
 	`value_text` text,
@@ -6,5 +6,4 @@ CREATE TABLE `app_settings` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `app_settings_key_unique` ON `app_settings` (`key`);--> statement-breakpoint
-ALTER TABLE `charts` ADD `display_order` integer DEFAULT 0 NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS `app_settings_key_unique` ON `app_settings` (`key`);
