@@ -1,13 +1,14 @@
 import { getDb } from '../client';
 import { responses } from '../schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export async function listResponsesBySubmission(submissionId) {
   return getDb().select().from(responses).where(eq(responses.submissionId, submissionId));
 }
 
 export async function upsertResponse(data) {
-  return getDb()
+  const db = getDb();
+  await db
     .insert(responses)
     .values({
       submissionId: data.submissionId,
@@ -16,17 +17,24 @@ export async function upsertResponse(data) {
       valueNumber: data.valueNumber ?? null,
       valueChoice: data.valueChoice ?? null
     })
-    .onConflictDoUpdate({
-      target: [responses.submissionId, responses.questionId],
+    .onDuplicateKeyUpdate({
       set: {
         valueText: data.valueText ?? null,
         valueNumber: data.valueNumber ?? null,
         valueChoice: data.valueChoice ?? null
       }
-    })
-    .returning();
+    });
+  const [row] = await db
+    .select()
+    .from(responses)
+    .where(
+      and(eq(responses.submissionId, data.submissionId), eq(responses.questionId, data.questionId))
+    )
+    .limit(1);
+  return [row];
 }
 
 export async function deleteResponse(id) {
-  return getDb().delete(responses).where(eq(responses.id, id)).returning();
+  await getDb().delete(responses).where(eq(responses.id, id));
+  return [];
 }

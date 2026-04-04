@@ -426,16 +426,17 @@ export default function Dashboard() {
 
   const ChartCard = ({ title, metricName, children }) => {
     const cardRef = useRef(null);
+    const chartExportRef = useRef(null);
     const [exporting, setExporting] = useState(false);
 
     const handleExport = async () => {
-      if (!cardRef.current || exporting) {
+      if (!chartExportRef.current || exporting) {
         return;
       }
 
       setExporting(true);
       try {
-        await exportElementAsPng(cardRef.current, title);
+        await exportElementAsPng(chartExportRef.current, title);
       } catch (error) {
         alert(error?.message || 'Failed to export chart image.');
       } finally {
@@ -470,7 +471,9 @@ export default function Dashboard() {
               ) : null}
             </Stack>
           </Box>
-          {children}
+          <Box ref={chartExportRef} sx={{ width: '100%', minWidth: 0 }}>
+            {children}
+          </Box>
         </CardContent>
       </Card>
     )};

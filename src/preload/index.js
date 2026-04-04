@@ -1,7 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
-import { findEventByName } from '../main/db/services/eventService';
-import { count } from 'drizzle-orm';
 
 // APIs for renderer
 const api = {
@@ -99,7 +97,24 @@ const api = {
     isUserAuthenticated: () => ipcRenderer.invoke('googleAuth:isUserAuthenticated'),
     ensureAuthenticated: () => ipcRenderer.invoke('googleAuth:ensureAuthenticated'),
     getUserProfile: () => ipcRenderer.invoke('googleAuth:getUserProfile'),
-    signOut: () => ipcRenderer.invoke('googleAuth:signOut')
+    signOut: () => ipcRenderer.invoke('googleAuth:signOut'),
+    cancelOAuthFlow: () => ipcRenderer.invoke('googleAuth:cancelOAuthFlow'),
+    getSettings: () => ipcRenderer.invoke('googleAuth:getSettings'),
+    selectCredentialFile: () => ipcRenderer.invoke('googleAuth:selectCredentialFile'),
+    processCredentialFile: (sourceFilePath) =>
+      ipcRenderer.invoke('googleAuth:processCredentialFile', sourceFilePath)
+  },
+  startup: {
+    getReadiness: () => ipcRenderer.invoke('startup:getReadiness')
+  },
+  dbSettings: {
+    get: () => ipcRenderer.invoke('dbSettings:get'),
+    isConnected: () => ipcRenderer.invoke('dbSettings:isConnected'),
+    testConnection: (config) => ipcRenderer.invoke('dbSettings:testConnection', config),
+    saveAndConnect: (config) => ipcRenderer.invoke('dbSettings:saveAndConnect', config),
+    setupDatabase: (config) => ipcRenderer.invoke('dbSettings:setupDatabase', config),
+    migrateSchema: () => ipcRenderer.invoke('dbSettings:migrateSchema'),
+    getHealth: () => ipcRenderer.invoke('dbSettings:getHealth')
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

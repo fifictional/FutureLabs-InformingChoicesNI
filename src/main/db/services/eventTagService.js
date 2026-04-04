@@ -7,15 +7,23 @@ export async function listEventTags() {
 }
 
 export async function findEventTagBySlug(slug) {
-  return getDb().select().from(eventTags).where(eq(eventTags.slug, slug)).limit(1).get();
+  const [row] = await getDb().select().from(eventTags).where(eq(eventTags.slug, slug)).limit(1);
+  return row ?? null;
 }
 
 export async function createEventTag(data) {
-  return getDb().insert(eventTags).values({ name: data.name, slug: data.slug }).returning();
+  const db = getDb();
+  const [{ id }] = await db
+    .insert(eventTags)
+    .values({ name: data.name, slug: data.slug })
+    .$returningId();
+  const [row] = await db.select().from(eventTags).where(eq(eventTags.id, id)).limit(1);
+  return [row];
 }
 
 export async function deleteEventTag(id) {
-  return getDb().delete(eventTags).where(eq(eventTags.id, id)).returning();
+  await getDb().delete(eventTags).where(eq(eventTags.id, id));
+  return [];
 }
 
 export async function listEventTagsForEvent(eventId) {
@@ -27,26 +35,23 @@ export async function listEventTagsForEvent(eventId) {
 }
 
 export async function addTagToEvent(eventId, tagId) {
-  return getDb()
-    .insert(eventTagMappings)
-    .values({ eventId, tagId })
-    .onConflictDoNothing({ target: [eventTagMappings.eventId, eventTagMappings.tagId] })
-    .returning();
+  await getDb().insert(eventTagMappings).values({ eventId, tagId }).ignore();
+  return [];
 }
 
 export async function removeTagFromEvent(eventId, tagId) {
-  const tag = getDb()
+  await getDb()
     .delete(eventTagMappings)
-    .where(and(eq(eventTagMappings.eventId, eventId), eq(eventTagMappings.tagId, tagId)))
-    .returning();
+    .where(and(eq(eventTagMappings.eventId, eventId), eq(eventTagMappings.tagId, tagId)));
 
-  const remainingMappings = getDb()
+  const [remaining] = await getDb()
     .select()
     .from(eventTagMappings)
-    .where(eq(eventTagMappings.tagId, tagId));
-  const [remaining] = await remainingMappings;
+    .where(eq(eventTagMappings.tagId, tagId))
+    .limit(1);
+
   if (!remaining) {
-    await getDb().delete(eventTags).where(eq(eventTags.id, tagId)).returning();
+    await getDb().delete(eventTags).where(eq(eventTags.id, tagId));
   }
-  return tag;
+  return [];
 }

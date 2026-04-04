@@ -18,7 +18,7 @@ export async function createChart(data) {
     .select({ maxDisplayOrder: sql`coalesce(max(${charts.displayOrder}), -1)` })
     .from(charts);
 
-  return getDb()
+  const [{ id }] = await db
     .insert(charts)
     .values({
       name: data.name,
@@ -28,7 +28,9 @@ export async function createChart(data) {
       createdAt: now,
       updatedAt: now
     })
-    .returning();
+    .$returningId();
+  const [row] = await db.select().from(charts).where(eq(charts.id, id)).limit(1);
+  return [row];
 }
 
 export async function updateChart(id, data) {
@@ -47,22 +49,26 @@ export async function updateChart(id, data) {
     updates.configuration = JSON.stringify(data.configuration);
   }
 
-  return getDb().update(charts).set(updates).where(eq(charts.id, id)).returning();
+  const db = getDb();
+  await db.update(charts).set(updates).where(eq(charts.id, id));
+  const [row] = await db.select().from(charts).where(eq(charts.id, id)).limit(1);
+  return [row];
 }
 
 export async function deleteChart(id) {
-  return getDb().delete(charts).where(eq(charts.id, id)).returning();
+  await getDb().delete(charts).where(eq(charts.id, id));
+  return [];
 }
 
 export async function reorderCharts(chartIds) {
   const db = getDb();
 
-  return db.transaction((tx) => {
+  return db.transaction(async (tx) => {
     for (let index = 0; index < chartIds.length; index += 1) {
-      tx.update(charts).set({ displayOrder: index }).where(eq(charts.id, chartIds[index])).run();
+      await tx.update(charts).set({ displayOrder: index }).where(eq(charts.id, chartIds[index]));
     }
 
-    return tx.select().from(charts).orderBy(asc(charts.displayOrder), asc(charts.id)).all();
+    return tx.select().from(charts).orderBy(asc(charts.displayOrder), asc(charts.id));
   });
 }
 

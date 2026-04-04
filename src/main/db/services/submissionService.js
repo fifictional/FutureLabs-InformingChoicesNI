@@ -18,7 +18,8 @@ export async function listSubmissionsByForm(formId) {
 }
 
 export async function createSubmission(data) {
-  return getDb()
+  const db = getDb();
+  const [{ id }] = await db
     .insert(submissions)
     .values({
       formId: data.formId,
@@ -26,9 +27,12 @@ export async function createSubmission(data) {
       submittedAt: data.submittedAt,
       externalId: data.externalId
     })
-    .returning();
+    .$returningId();
+  const [row] = await db.select().from(submissions).where(eq(submissions.id, id)).limit(1);
+  return [row];
 }
 
 export async function deleteSubmission(id) {
-  return getDb().delete(submissions).where(eq(submissions.id, id)).returning();
+  await getDb().delete(submissions).where(eq(submissions.id, id));
+  return [];
 }

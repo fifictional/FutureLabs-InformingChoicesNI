@@ -5,6 +5,9 @@ import SkeletonAppBar from "../../components/skeletons/SkeletonAppBar";
 
 function resolveAuthErrorMessage(err) {
     const message = err?.message || '';
+    if (message.includes("window.api is unavailable") || message.includes("window.api.googleAuth is unavailable")) {
+        return 'App bridge is unavailable. Please restart the app. If the issue continues, contact developers.';
+    }
     if (message.includes('No Google credentials were found') || err?.code === 'GOOGLE_CREDENTIALS_MISSING') {
         return 'No Google credentials found. Please add credentials/credentials.json and restart the app.';
     }
@@ -20,6 +23,12 @@ export default function GoogleAuthLayout() {
     useEffect(() => {
         async function checkAuth() {
             try {
+                if (!window.api) {
+                    throw new Error('window.api is unavailable');
+                }
+                if (!window.api.googleAuth) {
+                    throw new Error('window.api.googleAuth is unavailable');
+                }
                 const authenticated = await window.api.googleAuth.isUserAuthenticated();
                 setIsAuthenticated(authenticated);
                 if (!authenticated) {

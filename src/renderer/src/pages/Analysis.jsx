@@ -231,6 +231,7 @@ function SavedChartDisplay({
   disableDragging = false
 }) {
   const chartCardRef = useRef(null);
+  const chartExportRef = useRef(null);
   const [dateRangeStart, setDateRangeStart] = useState(chart.configuration?.startDate || '');
   const [dateRangeEnd, setDateRangeEnd] = useState(chart.configuration?.endDate || '');
   const [trendSettings, setTrendSettings] = useState(() =>
@@ -727,13 +728,13 @@ function SavedChartDisplay({
   const formattedDate = new Date(chart.updatedAt).toLocaleDateString();
 
   const handleExport = async () => {
-    if (!chartCardRef.current || exporting) {
+    if (!chartExportRef.current || exporting) {
       return;
     }
 
     setExporting(true);
     try {
-      await exportElementAsPng(chartCardRef.current, chart.name);
+      await exportElementAsPng(chartExportRef.current, chart.name);
     } catch (error) {
       alert(error?.message || 'Failed to export chart image.');
     } finally {
@@ -922,9 +923,10 @@ function SavedChartDisplay({
               </Stack>
             </Stack>
           )}
-
-          {/* Chart rendering */}
-          {renderChart()}
+          {/* Export only the rendered chart area (exclude filters and action buttons). */}
+          <Box ref={chartExportRef} sx={{ width: '100%', minWidth: 0 }}>
+            {renderChart()}
+          </Box>
         </Stack>
       </CardContent>
       </Card>

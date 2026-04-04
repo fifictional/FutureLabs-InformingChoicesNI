@@ -7,19 +7,22 @@ export async function listQuestionsByForm(formId) {
 }
 
 export async function createQuestion(data) {
+  const db = getDb();
   const payload =
     typeof data === 'object' && data !== null
       ? data
       : { formId: data, text: '', answerType: 'text' };
 
-  return getDb()
+  const [{ id }] = await db
     .insert(questions)
     .values({
       formId: payload.formId,
       text: payload.text ?? '',
       answerType: payload.answerType ?? 'text'
     })
-    .returning();
+    .$returningId();
+  const [row] = await db.select().from(questions).where(eq(questions.id, id)).limit(1);
+  return [row];
 }
 
 export async function listQuestionChoicesByQuestion(questionId) {
@@ -41,18 +44,18 @@ export async function createQuestionChoices(questionId, choices) {
   }
 
   if (rows.length === 0) return [];
-  return getDb().insert(questionChoice).values(rows).returning();
+  await getDb().insert(questionChoice).values(rows);
+  return rows;
 }
 
 export async function deleteQuestionChoicesByQuestion(questionId) {
-  return getDb()
-    .delete(questionChoice)
-    .where(eq(questionChoice.questionId, questionId))
-    .returning();
+  await getDb().delete(questionChoice).where(eq(questionChoice.questionId, questionId));
+  return [];
 }
 
 export async function deleteQuestionChoice(id) {
-  return getDb().delete(questionChoice).where(eq(questionChoice.id, id)).returning();
+  await getDb().delete(questionChoice).where(eq(questionChoice.id, id));
+  return [];
 }
 
 export async function deleteQuestion(id, options = {}) {
@@ -60,5 +63,6 @@ export async function deleteQuestion(id, options = {}) {
   if (deleteChoices) {
     await deleteQuestionChoicesByQuestion(id);
   }
-  return getDb().delete(questions).where(eq(questions.id, id)).returning();
+  await getDb().delete(questions).where(eq(questions.id, id));
+  return [];
 }

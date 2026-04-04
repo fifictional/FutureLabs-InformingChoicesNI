@@ -24,7 +24,7 @@ export async function listEventsWithSurveyCountsAndTags() {
   const tagAgg = getDb()
     .select({
       eventId: eventTagMappings.eventId,
-      tags: sql`group_concat(${eventTags.name}, ',')`.as('tags')
+      tags: sql`group_concat(${eventTags.name})`.as('tags')
     })
     .from(eventTagMappings)
     .innerJoin(eventTags, eq(eventTags.id, eventTagMappings.tagId))
@@ -53,20 +53,26 @@ export async function listEventsWithSurveyCountsAndTags() {
 }
 
 export async function createEvent(data) {
-  return getDb()
+  const db = getDb();
+  const [{ id }] = await db
     .insert(events)
     .values({ name: data.name, description: data.description ?? null })
-    .returning();
+    .$returningId();
+  const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
+  return [row];
 }
 
 export async function updateEvent(id, data) {
-  return getDb()
+  const db = getDb();
+  await db
     .update(events)
     .set({ name: data.name, description: data.description ?? null })
-    .where(eq(events.id, id))
-    .returning();
+    .where(eq(events.id, id));
+  const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
+  return [row];
 }
 
 export async function deleteEvent(id) {
-  return getDb().delete(events).where(eq(events.id, id)).returning();
+  await getDb().delete(events).where(eq(events.id, id));
+  return [];
 }

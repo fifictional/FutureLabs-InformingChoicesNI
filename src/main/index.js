@@ -1,7 +1,14 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
-import { ensureDatabaseReady, initDb } from './db/client.js';
+import {
+  ensureDatabaseReady,
+  getDatabaseHealth,
+  isDbConnected,
+  reinitDb,
+  runMigrations,
+  testMysqlConnection
+} from './db/client.js';
 import * as eventService from './db/services/eventService.js';
 import * as eventTagService from './db/services/eventTagService.js';
 import * as formService from './db/services/formService';
@@ -25,10 +32,70 @@ import {
   isUserAuthenticated,
   signOut
 } from './common/google-forms/google-auth-client.js';
+import {
+  getCredentialStatus,
+  processCredentialsFile
+} from './common/google-forms/credential-store.js';
+import { getSetting, setSetting, SETTINGS_KEYS } from './common/settings/settings.js';
 import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
 import { importGoogleForms } from './surveys/googleFormsImport.js';
 
 let mainWindow;
+
+function getMigrationsFolder() {
+  return app.isPackaged ? join(process.resourcesPath, 'drizzle') : join(__dirname, '../../drizzle');
+}
+
+async function getStartupReadiness() {
+  let dbHealth;
+  try {
+    dbHealth = await getDatabaseHealth(getMigrationsFolder());
+  } catch (error) {
+    dbHealth = {
+      ok: false,
+      connected: false,
+      schemaValid: false,
+      migrationsValid: false,
+      requiredTablesMissing: [],
+      expectedMigrations: 0,
+      appliedMigrations: 0,
+      pendingMigrations: 0,
+      message: error?.message || 'Failed to inspect database health.'
+    };
+  }
+
+  const credentialStatus = getCredentialStatus();
+  let googleAuthenticated = false;
+  let googleAuthMessage = '';
+
+  if (credentialStatus.valid) {
+    try {
+      googleAuthenticated = await isUserAuthenticated();
+    } catch (error) {
+      googleAuthenticated = false;
+      googleAuthMessage = error?.message || 'Failed to validate Google sign-in state.';
+    }
+  }
+
+  const googleReady = credentialStatus.valid && googleAuthenticated;
+
+  return {
+    ready: Boolean(dbHealth?.ok) && googleReady,
+    db: {
+      ready: Boolean(dbHealth?.ok),
+      ...dbHealth
+    },
+    google: {
+      ready: googleReady,
+      credentialStatus,
+      authenticated: googleAuthenticated,
+      message: googleReady
+        ? 'Google authentication is ready.'
+        : googleAuthMessage ||
+          (credentialStatus.valid ? 'Sign in with Google to continue.' : credentialStatus.message)
+    }
+  };
+}
 
 function createWindow() {
   // Create the browser window.
@@ -81,12 +148,9 @@ app.whenReady().then(async () => {
 
   ipcMain.on('ping', () => console.log('pong'));
 
-  const migrationsFolder = app.isPackaged
-    ? join(process.resourcesPath, 'drizzle')
-    : join(__dirname, '../../drizzle');
+  const migrationsFolder = getMigrationsFolder();
 
-  ensureDatabaseReady(migrationsFolder);
-  initDb();
+  await ensureDatabaseReady(migrationsFolder);
 
   createWindow();
 
@@ -207,6 +271,70 @@ ipcMain.handle('googleAuth:isUserAuthenticated', () => isUserAuthenticated());
 ipcMain.handle('googleAuth:ensureAuthenticated', () => ensureAuthenticated());
 ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
 ipcMain.handle('googleAuth:signOut', () => signOut());
+ipcMain.handle('googleAuth:cancelOAuthFlow', () => cancelOAuthFlow());
+ipcMain.handle('googleAuth:getSettings', () => ({
+  credentialSourcePath: getSetting(SETTINGS_KEYS.GOOGLE_CREDENTIAL_SOURCE_PATH) || '',
+  credentialPath: getSetting(SETTINGS_KEYS.GOOGLE_RAW_CREDENTIALS_RELATIVE_PATH) || '',
+  encryptedCredentialPath:
+    getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_CREDENTIALS_RELATIVE_PATH) || '',
+  tokenPath: getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH) || '',
+  credentialStatus: getCredentialStatus()
+}));
+ipcMain.handle('googleAuth:selectCredentialFile', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Google credentials.json',
+    properties: ['openFile'],
+    filters: [
+      { name: 'JSON', extensions: ['json'] },
+      { name: 'All files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePaths?.length) {
+    return { ok: false, cancelled: true };
+  }
+
+  return { ok: true, filePath: result.filePaths[0] };
+});
+ipcMain.handle('googleAuth:processCredentialFile', async (_event, sourceFilePath) => {
+  try {
+    setSetting(SETTINGS_KEYS.GOOGLE_CREDENTIAL_SOURCE_PATH, sourceFilePath || '');
+    if (!getSetting(SETTINGS_KEYS.GOOGLE_RAW_CREDENTIALS_RELATIVE_PATH)) {
+      setSetting(
+        SETTINGS_KEYS.GOOGLE_RAW_CREDENTIALS_RELATIVE_PATH,
+        'credentials/credentials.json'
+      );
+    }
+    if (!getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_CREDENTIALS_RELATIVE_PATH)) {
+      setSetting(
+        SETTINGS_KEYS.GOOGLE_ENCRYPTED_CREDENTIALS_RELATIVE_PATH,
+        'credentials/encrypted-credentials.bin'
+      );
+    }
+    if (!getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH)) {
+      setSetting(
+        SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH,
+        'credentials/encrypted-token.bin'
+      );
+    }
+
+    const processed = processCredentialsFile(sourceFilePath);
+    await signOut();
+
+    return {
+      ...processed,
+      credentialStatus: getCredentialStatus()
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || 'Failed to process credentials file.',
+      credentialStatus: getCredentialStatus()
+    };
+  }
+});
+
+ipcMain.handle('startup:getReadiness', () => getStartupReadiness());
 
 // google forms
 ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
@@ -294,4 +422,91 @@ ipcMain.on('window:maximize-toggle', () => {
 
 ipcMain.on('window:close', () => {
   mainWindow.close();
+});
+
+// DB connection settings
+ipcMain.handle('dbSettings:get', () => ({
+  host: getSetting(SETTINGS_KEYS.MYSQL_HOST) || '',
+  port: String(getSetting(SETTINGS_KEYS.MYSQL_PORT) || ''),
+  database: getSetting(SETTINGS_KEYS.MYSQL_DATABASE) || '',
+  user: getSetting(SETTINGS_KEYS.MYSQL_USER) || '',
+  passwordEnvVar: 'DB_PASSWORD',
+  passwordSet: Boolean(process.env.DB_PASSWORD)
+}));
+
+ipcMain.handle('dbSettings:isConnected', () => isDbConnected());
+
+ipcMain.handle('dbSettings:testConnection', async (_event, config) => {
+  const testConfig = {
+    host: config.host || '',
+    port: Number(config.port) || 0,
+    database: config.database || '',
+    user: config.user || '',
+    password: process.env.DB_PASSWORD || ''
+  };
+  return testMysqlConnection(testConfig);
+});
+
+ipcMain.handle('dbSettings:saveAndConnect', async (_event, config) => {
+  try {
+    setSetting(SETTINGS_KEYS.MYSQL_HOST, config.host || '');
+    setSetting(SETTINGS_KEYS.MYSQL_PORT, Number(config.port) || '');
+    setSetting(SETTINGS_KEYS.MYSQL_DATABASE, config.database || '');
+    setSetting(SETTINGS_KEYS.MYSQL_USER, config.user || '');
+
+    await reinitDb();
+
+    return { ok: isDbConnected() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('dbSettings:setupDatabase', async (_event, config) => {
+  try {
+    setSetting(SETTINGS_KEYS.MYSQL_HOST, config.host || '');
+    setSetting(SETTINGS_KEYS.MYSQL_PORT, Number(config.port) || '');
+    setSetting(SETTINGS_KEYS.MYSQL_DATABASE, config.database || '');
+    setSetting(SETTINGS_KEYS.MYSQL_USER, config.user || '');
+
+    await reinitDb();
+
+    return { ok: isDbConnected() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('dbSettings:migrateSchema', async () => {
+  try {
+    const migrationsFolder = app.isPackaged
+      ? join(process.resourcesPath, 'drizzle')
+      : join(__dirname, '../../drizzle');
+
+    await runMigrations(migrationsFolder);
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('dbSettings:getHealth', async () => {
+  try {
+    const migrationsFolder = getMigrationsFolder();
+
+    return await getDatabaseHealth(migrationsFolder);
+  } catch (err) {
+    return {
+      ok: false,
+      connected: false,
+      schemaValid: false,
+      migrationsValid: false,
+      requiredTablesMissing: [],
+      expectedMigrations: 0,
+      appliedMigrations: 0,
+      pendingMigrations: 0,
+      message: err?.message || 'Failed to inspect database health.'
+    };
+  }
 });

@@ -312,11 +312,11 @@ async function getYesNoChoiceQuestionIds() {
 async function ensureMetricRows() {
   const db = getDb();
   for (const metric of CONFIGURABLE_METRICS) {
-    const existing = await db
+    const [existing] = await db
       .select({ id: statisticOverviews.id })
       .from(statisticOverviews)
       .where(eq(statisticOverviews.name, metric.name))
-      .get();
+      .limit(1);
 
     if (!existing) {
       await db.insert(statisticOverviews).values({
@@ -404,11 +404,11 @@ export async function listConfigurableOverviewMetrics() {
     row.selectedQuestionText = replacement.text;
     row.selectedQuestionAnswerType = replacement.answerType;
 
-    const replacementForm = await db
+    const [replacementForm] = await db
       .select({ id: forms.id, name: forms.name })
       .from(forms)
       .where(eq(forms.id, replacement.formId))
-      .get();
+      .limit(1);
 
     row.selectedFormId = replacement.formId;
     row.selectedFormName = replacementForm?.name || null;
@@ -442,7 +442,7 @@ export async function listSelectableSurveyQuestions(metricName) {
   const eventTagsAgg = db
     .select({
       eventId: eventTagMappings.eventId,
-      tagsCsv: sql`group_concat(${eventTags.name}, ',')`.as('tagsCsv')
+      tagsCsv: sql`group_concat(${eventTags.name})`.as('tagsCsv')
     })
     .from(eventTagMappings)
     .innerJoin(eventTags, eq(eventTags.id, eventTagMappings.tagId))
@@ -517,11 +517,11 @@ export async function setOverviewMetricQuestion(metricName, questionId) {
   }
 
   const db = getDb();
-  const question = await db
+  const [question] = await db
     .select({ id: questions.id, text: questions.text, answerType: questions.answerType })
     .from(questions)
     .where(eq(questions.id, numericQuestionId))
-    .get();
+    .limit(1);
 
   if (!question) {
     throw new Error('Selected question was not found');
@@ -578,11 +578,11 @@ export async function getDashboardOverviewData(rawFilters = {}) {
   const filters = normalizeDashboardFilters(rawFilters);
   const submittedAtWhere = buildSubmittedAtWhere(submissions.submittedAt, filters);
 
-  const totalFeedbackRow = await db
+  const [totalFeedbackRow] = await db
     .select({ count: count() })
     .from(submissions)
     .where(submittedAtWhere)
-    .get();
+    .limit(1);
   const totalFeedbackReceived = Number(totalFeedbackRow?.count || 0);
 
   const identifiedRows = await listSubmissionReferenceRows(filters);

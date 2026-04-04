@@ -1,170 +1,240 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { app } from 'electron';
+import { drizzle } from 'drizzle-orm/mysql2';
+import { migrate } from 'drizzle-orm/mysql2/migrator';
+import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
 import * as schema from './schema.js';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { getSetting, SETTINGS_KEYS } from '../common/settings/settings.js';
 
-let db;
+let db = null;
+let connectionPool = null;
+let isConnected = false;
 
-function getDbPath() {
-  const appDataDirectory = app.getPath('userData');
-  return path.join(appDataDirectory, 'app.db');
+function getMysqlConfig() {
+  const rawPort = getSetting(SETTINGS_KEYS.MYSQL_PORT);
+  const parsedPort = Number(rawPort);
+
+  return {
+    host: getSetting(SETTINGS_KEYS.MYSQL_HOST) || '',
+    port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : null,
+    database: getSetting(SETTINGS_KEYS.MYSQL_DATABASE) || '',
+    user: getSetting(SETTINGS_KEYS.MYSQL_USER) || '',
+    password: process.env.DB_PASSWORD || ''
+  };
 }
 
-function tableExists(sqlite, tableName) {
-  const row = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(tableName);
-
-  return Boolean(row);
-}
-
-function runMigrations(dbPath, migrationsFolder) {
-  const sqlite = new Database(dbPath);
-
-  try {
-    const migrationDb = drizzle(sqlite, { schema });
-    migrate(migrationDb, { migrationsFolder });
-  } finally {
-    sqlite.close();
-  }
-}
-
-function backupDatabaseFiles(dbPath) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupBasePath = `${dbPath}.backup-invalid-${timestamp}`;
-  const suffixes = ['', '-wal', '-shm'];
-
-  for (const suffix of suffixes) {
-    const sourcePath = `${dbPath}${suffix}`;
-    if (fs.existsSync(sourcePath)) {
-      fs.copyFileSync(sourcePath, `${backupBasePath}${suffix}`);
-    }
-  }
-
-  return backupBasePath;
-}
-
-function removeDatabaseFiles(dbPath) {
-  const suffixes = ['', '-wal', '-shm'];
-
-  for (const suffix of suffixes) {
-    const filePath = `${dbPath}${suffix}`;
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  }
-}
-
-function ensureCompatibility(sqlite) {
-  if (tableExists(sqlite, 'submissions')) {
-    const submissionColumns = sqlite.prepare("PRAGMA table_info('submissions')").all();
-    const hasUserReferenceId = submissionColumns.some(
-      (column) => column.name === 'user_reference_id'
-    );
-
-    if (!hasUserReferenceId) {
-      sqlite.exec('ALTER TABLE submissions ADD COLUMN user_reference_id TEXT');
-    }
-  }
-
-  if (tableExists(sqlite, 'charts')) {
-    const chartColumns = sqlite.prepare("PRAGMA table_info('charts')").all();
-    const hasDisplayOrder = chartColumns.some((column) => column.name === 'display_order');
-
-    if (!hasDisplayOrder) {
-      sqlite.exec('ALTER TABLE charts ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0');
-
-      const existingCharts = sqlite
-        .prepare('SELECT id FROM charts ORDER BY updated_at ASC, id ASC')
-        .all();
-      const updateDisplayOrder = sqlite.prepare('UPDATE charts SET display_order = ? WHERE id = ?');
-
-      const backfillDisplayOrder = sqlite.transaction(() => {
-        existingCharts.forEach((chart, index) => {
-          updateDisplayOrder.run(index, chart.id);
-        });
-      });
-
-      backfillDisplayOrder();
-    }
-  }
-
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS clients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      non_confidential_identifier TEXT,
-      date_of_birth INTEGER,
-      reference_id TEXT NOT NULL UNIQUE
-    )
-  `);
-
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS app_settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      key TEXT NOT NULL UNIQUE,
-      value_text TEXT,
-      value_number INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-}
-
-function createDb() {
-  const dbPath = getDbPath();
-  const sqlite = new Database(dbPath);
-
-  // Use write-ahead logging
-  sqlite.pragma('journal_mode = WAL');
-
-  // Backfill schema changes for databases created before migration files were added.
-  ensureCompatibility(sqlite);
-
-  return drizzle(sqlite, { schema });
-}
-
-export function initDb() {
-  if (!db) {
-    db = createDb();
-  }
-
-  return db;
+export function isDbConnected() {
+  return isConnected;
 }
 
 export function getDb() {
-  return initDb();
-}
-
-export function initialDbSetup(migrationsFolder) {
-  ensureDatabaseReady(migrationsFolder);
-}
-
-export function ensureDatabaseReady(migrationsFolder) {
-  if (!migrationsFolder || !fs.existsSync(migrationsFolder)) {
-    console.warn('Migrations folder was not found, skipping migration step:', migrationsFolder);
-    return;
+  if (!db) {
+    throw new Error(
+      'Database is not connected. Please configure the MySQL connection in Settings.'
+    );
   }
+  return db;
+}
 
-  const dbPath = getDbPath();
-  const hasExistingDb = fs.existsSync(dbPath);
+async function createPool(config) {
+  const pool = mysql.createPool({
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    waitForConnections: true,
+    connectionLimit: 10,
+    connectTimeout: 10000
+  });
+  const conn = await pool.getConnection();
+  conn.release();
+  return pool;
+}
 
-  if (!hasExistingDb) {
-    runMigrations(dbPath, migrationsFolder);
+export async function testMysqlConnection(config) {
+  let pool = null;
+  try {
+    pool = mysql.createPool({
+      host: config.host,
+      port: config.port,
+      database: config.database,
+      user: config.user,
+      password: config.password,
+      waitForConnections: true,
+      connectionLimit: 1,
+      connectTimeout: 5000
+    });
+    const conn = await pool.getConnection();
+    conn.release();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    if (pool) await pool.end().catch(() => {});
+  }
+}
+
+export async function initDb() {
+  const config = getMysqlConfig();
+
+  const missing = [];
+  if (!config.host) missing.push('host');
+  if (!config.port) missing.push('port');
+  if (!config.database) missing.push('database');
+  if (!config.user) missing.push('user');
+  if (!config.password) missing.push('DB_PASSWORD environment variable');
+
+  if (missing.length > 0) {
+    console.warn('MySQL configuration incomplete, missing:', missing.join(', '));
+    isConnected = false;
     return;
   }
 
   try {
-    runMigrations(dbPath, migrationsFolder);
-  } catch (error) {
-    console.error(
-      'Database migration failed. Backing up invalid DB and recreating a fresh one.',
-      error
+    connectionPool = await createPool(config);
+    db = drizzle(connectionPool, { schema, mode: 'default' });
+    isConnected = true;
+    console.log('MySQL database connected successfully');
+  } catch (err) {
+    console.error('Failed to connect to MySQL database:', err.message);
+    isConnected = false;
+    db = null;
+    connectionPool = null;
+  }
+}
+
+export async function reinitDb() {
+  if (connectionPool) {
+    await connectionPool.end().catch(() => {});
+    connectionPool = null;
+  }
+  db = null;
+  isConnected = false;
+  await initDb();
+}
+
+export async function ensureDatabaseReady(migrationsFolder) {
+  await initDb();
+
+  if (!isConnected) {
+    console.warn('Skipping migrations: not connected to MySQL database');
+    return;
+  }
+
+  try {
+    await migrate(db, { migrationsFolder });
+    console.log('Migrations applied successfully');
+  } catch (err) {
+    console.error('Migration failed:', err.message);
+    isConnected = false;
+    db = null;
+  }
+}
+
+export async function runMigrations(migrationsFolder) {
+  if (!isConnected || !db) {
+    throw new Error('Database is not connected. Set up the database first.');
+  }
+
+  await migrate(db, { migrationsFolder });
+}
+
+function readExpectedMigrationCount(migrationsFolder) {
+  try {
+    const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+    if (!fs.existsSync(journalPath)) {
+      return 0;
+    }
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+    return Array.isArray(journal?.entries) ? journal.entries.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getDatabaseHealth(migrationsFolder) {
+  const config = getMysqlConfig();
+  const requiredTables = [
+    'events',
+    'event_tags',
+    'event_tag_mappings',
+    'forms',
+    'questions',
+    'submissions',
+    'responses',
+    'question_choice',
+    'clients',
+    'app_settings',
+    'statistic_overviews',
+    'charts'
+  ];
+
+  if (!isConnected || !connectionPool || !config.database) {
+    return {
+      ok: false,
+      connected: false,
+      schemaValid: false,
+      migrationsValid: false,
+      requiredTablesMissing: requiredTables,
+      expectedMigrations: readExpectedMigrationCount(migrationsFolder),
+      appliedMigrations: 0,
+      pendingMigrations: readExpectedMigrationCount(migrationsFolder),
+      message: 'Database is not connected.'
+    };
+  }
+
+  try {
+    const [tableRows] = await connectionPool.query(
+      `SELECT table_name AS tableName
+       FROM information_schema.tables
+       WHERE table_schema = ? AND table_name IN (${requiredTables.map(() => '?').join(',')})`,
+      [config.database, ...requiredTables]
     );
-    const backupBasePath = backupDatabaseFiles(dbPath);
-    removeDatabaseFiles(dbPath);
-    runMigrations(dbPath, migrationsFolder);
-    console.warn('Recreated database from migrations. Backup path prefix:', backupBasePath);
+
+    const existingTableNames = new Set(tableRows.map((row) => row.tableName));
+    const requiredTablesMissing = requiredTables.filter((name) => !existingTableNames.has(name));
+    const schemaValid = requiredTablesMissing.length === 0;
+
+    let appliedMigrations = 0;
+    try {
+      const [migrationRows] = await connectionPool.query(
+        'SELECT COUNT(*) AS count FROM __drizzle_migrations'
+      );
+      appliedMigrations = Number(migrationRows?.[0]?.count || 0);
+    } catch {
+      appliedMigrations = 0;
+    }
+
+    const expectedMigrations = readExpectedMigrationCount(migrationsFolder);
+    const pendingMigrations = Math.max(expectedMigrations - appliedMigrations, 0);
+    const migrationsValid = pendingMigrations === 0;
+    const ok = schemaValid && migrationsValid;
+
+    return {
+      ok,
+      connected: true,
+      schemaValid,
+      migrationsValid,
+      requiredTablesMissing,
+      expectedMigrations,
+      appliedMigrations,
+      pendingMigrations,
+      message: ok
+        ? 'Database schema and migrations look healthy.'
+        : 'Database has schema or migration issues.'
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      connected: true,
+      schemaValid: false,
+      migrationsValid: false,
+      requiredTablesMissing: requiredTables,
+      expectedMigrations: readExpectedMigrationCount(migrationsFolder),
+      appliedMigrations: 0,
+      pendingMigrations: readExpectedMigrationCount(migrationsFolder),
+      message: err?.message || 'Failed to inspect database health.'
+    };
   }
 }

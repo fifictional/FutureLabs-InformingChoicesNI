@@ -1,8 +1,10 @@
 import {
+    Alert,
     AppBar,
     Avatar,
     Box,
     Button,
+    CircularProgress,
     css,
     Divider,
     Drawer,
@@ -22,7 +24,10 @@ import CropSquareIcon from '@mui/icons-material/CropSquare';
 import MenuIcon from '@mui/icons-material/Menu';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import SettingsIcon from '@mui/icons-material/Settings';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import { useAuth } from '../../common/AuthContext';
 
 const drawerWidth = 260;
 
@@ -30,29 +35,67 @@ export default function AppBarLayout() {
 
     const theme = useTheme();
     const [userInfo, setUserInfo] = useState(null);
+    const [readinessStatus, setReadinessStatus] = useState(null);
+    const [readinessChecking, setReadinessChecking] = useState(true);
+    const [signInBusy, setSignInBusy] = useState(false);
+    const [signedOutMessage, setSignedOutMessage] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
+    const { authVersion, refreshAuth } = useAuth();
 
     const navigationItems = [
         { label: 'Home', to: '/' },
         { label: 'Clients', to: '/clients' },
         { label: 'Surveys', to: '/surveys' },
         { label: 'Events', to: '/events' },
-        { label: 'Analysis', to: '/analysis' }
+        { label: 'Analysis', to: '/analysis' },
+        { label: 'Help', to: '/help' },
+        { label: 'Settings', to: '/settings' }
     ];
 
     useEffect(() => {
-        async function fetchUserInfo() {
+        async function checkAll() {
+            setReadinessChecking(true);
+            setReadinessStatus(null);
             try {
-                const info = await window.api.googleAuth.getUserProfile();
-                setUserInfo(info);
+                const status = await window.api.startup.getReadiness();
+                setReadinessStatus(status);
+                if (status?.google?.authenticated) {
+                    try {
+                        const info = await window.api.googleAuth.getUserProfile();
+                        setUserInfo(info);
+                    } catch {
+                        setUserInfo(null);
+                    }
+                } else {
+                    setUserInfo(null);
+                }
             } catch (err) {
-                console.error('Error fetching user info:', err);
+                console.error('Readiness check failed:', err);
+                setReadinessStatus({ ready: false, db: { ready: false }, google: { ready: false, credentialStatus: { valid: false }, authenticated: false } });
+                setUserInfo(null);
+            } finally {
+                setReadinessChecking(false);
             }
         }
-        fetchUserInfo();
-    }, []);
+        checkAll();
+    }, [authVersion]);
+
+    const isUnguardedRoute = location.pathname.startsWith('/settings') || location.pathname.startsWith('/help');
+    const canPromptSignIn = Boolean(readinessStatus?.google?.credentialStatus?.valid) && !Boolean(readinessStatus?.google?.authenticated);
+
+    const handleReadinessSignIn = async () => {
+        setSignInBusy(true);
+        try {
+            await window.api.googleAuth.ensureAuthenticated();
+        } catch (err) {
+            console.warn('Sign-in failed:', err);
+        } finally {
+            setSignInBusy(false);
+            refreshAuth();
+        }
+    };
 
     const appBarStyle = css`
         app-region: drag;
@@ -156,7 +199,11 @@ export default function AppBarLayout() {
             console.error('Error signing out from Google:', error);
         } finally {
             setUserInfo(null);
-            window.location.reload();
+            setSignedOutMessage(true);
+            setTimeout(() => {
+                setSignedOutMessage(false);
+                refreshAuth(); // Remount guard after showing confirmation
+            }, 2000);
         }
     };
 
@@ -197,6 +244,22 @@ export default function AppBarLayout() {
                     <Button component={Link} to="surveys">Surveys</Button>
                     <Button component={Link} to="events">Events</Button>
                     <Button component={Link} to="analysis">Analysis</Button>
+                    <IconButton
+                        css={arrowIconButtonStyle}
+                        component={Link}
+                        to="/help"
+                        title="Help"
+                    >
+                        <HelpOutlineIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                        css={arrowIconButtonStyle}
+                        component={Link}
+                        to="/settings"
+                        title="Settings"
+                    >
+                        <SettingsIcon fontSize="small" />
+                    </IconButton>
                 </Stack>
                 {userInfo &&
                     <Stack css={userPanelStyles} spacing={2} direction="row" alignItems="center" justifyContent="start">
@@ -213,6 +276,36 @@ export default function AppBarLayout() {
             </Toolbar>
         </AppBar>
         <Toolbar variant="dense" />
+        {signedOutMessage && (
+            <Alert severity="info" sx={{ borderRadius: 0 }}>
+                You've been signed out from Google. Guarded features require re-authentication.
+            </Alert>
+        )}
+        {!readinessChecking && readinessStatus && !readinessStatus?.ready && isUnguardedRoute && !signedOutMessage && (
+            <Alert
+                severity="warning"
+                sx={{ borderRadius: 0 }}
+                action={
+                    canPromptSignIn ? (
+                        <Button
+                            color="inherit"
+                            size="small"
+                            disabled={signInBusy}
+                            onClick={handleReadinessSignIn}
+                            startIcon={signInBusy ? <CircularProgress size={14} color="inherit" /> : null}
+                        >
+                            Sign In With Google
+                        </Button>
+                    ) : undefined
+                }
+            >
+                {readinessStatus?.google?.ready === false
+                    ? (readinessStatus?.db?.ready === false
+                        ? 'Database connection and Google authentication are both required.'
+                        : (readinessStatus?.google?.message || 'Google authentication required before using the app.'))
+                    : (readinessStatus?.db?.message || 'Setup required before using the app.')}
+            </Alert>
+        )}
         <Outlet />
         </>
     );

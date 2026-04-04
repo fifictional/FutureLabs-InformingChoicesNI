@@ -35,15 +35,15 @@ function parseAppointmentsValue(value) {
 
 async function ensureAppointmentsRow() {
   const db = getDb();
-  const existing = await db
+  const [existing] = await db
     .select()
     .from(appSettings)
     .where(eq(appSettings.key, TOTAL_APPOINTMENTS_KEY))
-    .get();
+    .limit(1);
 
   if (existing) return existing;
 
-  const inserted = await db
+  const [{ id }] = await db
     .insert(appSettings)
     .values({
       key: TOTAL_APPOINTMENTS_KEY,
@@ -51,9 +51,10 @@ async function ensureAppointmentsRow() {
       valueNumber: 0,
       updatedAt: new Date()
     })
-    .returning();
+    .$returningId();
 
-  return inserted[0];
+  const [inserted] = await db.select().from(appSettings).where(eq(appSettings.id, id)).limit(1);
+  return inserted;
 }
 
 export async function listClients() {
@@ -79,16 +80,17 @@ export async function createClient(data) {
     throw new Error('Date of birth is required');
   }
 
-  const inserted = await db
+  const [{ id }] = await db
     .insert(clients)
     .values({
       nonConfidentialIdentifier: initials,
       dateOfBirth,
       referenceId
     })
-    .returning();
+    .$returningId();
 
-  return inserted[0];
+  const [row] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
+  return row;
 }
 
 export async function updateClient(id, data) {
@@ -114,22 +116,23 @@ export async function updateClient(id, data) {
     throw new Error('Date of birth is required');
   }
 
-  const updated = await db
+  await db
     .update(clients)
     .set({
       nonConfidentialIdentifier: initials,
       dateOfBirth,
       referenceId
     })
-    .where(eq(clients.id, clientId))
-    .returning();
+    .where(eq(clients.id, clientId));
 
-  return updated[0] || null;
+  const [row] = await db.select().from(clients).where(eq(clients.id, clientId)).limit(1);
+  return row || null;
 }
 
 export async function deleteClient(id) {
   const db = getDb();
-  return db.delete(clients).where(eq(clients.id, id)).returning();
+  await db.delete(clients).where(eq(clients.id, id));
+  return [];
 }
 
 export async function getTotalAppointments() {
@@ -142,13 +145,12 @@ export async function setTotalAppointments(value) {
   const nextValue = parseAppointmentsValue(value);
   await ensureAppointmentsRow();
 
-  const updated = await db
+  await db
     .update(appSettings)
     .set({ valueNumber: nextValue, updatedAt: new Date() })
-    .where(eq(appSettings.key, TOTAL_APPOINTMENTS_KEY))
-    .returning();
+    .where(eq(appSettings.key, TOTAL_APPOINTMENTS_KEY));
 
-  return Number(updated[0]?.valueNumber || nextValue);
+  return nextValue;
 }
 
 export async function adjustTotalAppointments(delta) {

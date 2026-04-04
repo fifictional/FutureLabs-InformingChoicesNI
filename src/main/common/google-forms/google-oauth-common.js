@@ -67,6 +67,28 @@ export function getOAuthRedirectUri() {
   return config.redirect_uris?.[0] || 'http://localhost';
 }
 
+let _activeOAuthServer = null;
+let _activeOAuthReject = null;
+
+function closeActiveOAuthServer() {
+  if (_activeOAuthServer) {
+    try {
+      _activeOAuthServer.close();
+    } catch {
+      /* ignore */
+    }
+    _activeOAuthServer = null;
+  }
+}
+
+export function cancelOAuthFlow() {
+  closeActiveOAuthServer();
+  if (_activeOAuthReject) {
+    _activeOAuthReject(new Error('Google sign-in was cancelled by the user'));
+    _activeOAuthReject = null;
+  }
+}
+
 export async function runInteractiveOAuthFlow({
   scopes,
   onTokens,
@@ -74,6 +96,8 @@ export async function runInteractiveOAuthFlow({
   buildAuthUrl,
   onCallback
 }) {
+  closeActiveOAuthServer();
+
   const redirectUri = getOAuthRedirectUri();
   const parsed = new URL(redirectUri);
   const hostname = parsed.hostname || '127.0.0.1';
@@ -81,6 +105,23 @@ export async function runInteractiveOAuthFlow({
   const runtimeRedirectUri = `${parsed.protocol}//${hostname}:${port}${parsed.pathname || ''}`;
 
   return new Promise((resolve, reject) => {
+    _activeOAuthReject = reject;
+    let settled = false;
+    let timeoutId = null;
+
+    function settle(fn) {
+      if (settled) return;
+      settled = true;
+      _activeOAuthReject = null;
+      clearTimeout(timeoutId);
+      try {
+        server.close();
+      } catch {
+        /* ignore */
+      }
+      fn();
+    }
+
     const server = http.createServer(async (req, res) => {
       try {
         if (!req.url) {
@@ -96,8 +137,7 @@ export async function runInteractiveOAuthFlow({
         if (error) {
           res.statusCode = 400;
           res.end(`Google OAuth error: ${error}`);
-          server.close();
-          reject(new Error(`Google OAuth error: ${error}`));
+          settle(() => reject(new Error(`Google OAuth error: ${error}`)));
           return;
         }
 
@@ -121,8 +161,7 @@ export async function runInteractiveOAuthFlow({
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.end(successMessage);
 
-        server.close();
-        resolve(result);
+        settle(() => resolve(result));
       } catch (error) {
         try {
           res.statusCode = 500;
@@ -130,15 +169,30 @@ export async function runInteractiveOAuthFlow({
         } catch {
           // Ignore response write errors
         }
-        server.close();
-        reject(error);
+        settle(() => reject(error));
       }
     });
 
-    server.on('error', reject);
+    _activeOAuthServer = server;
+
+    server.on('close', () => {
+      if (_activeOAuthServer === server) _activeOAuthServer = null;
+    });
+
+    server.on('error', (err) => {
+      if (_activeOAuthServer === server) _activeOAuthServer = null;
+      reject(err);
+    });
 
     server.listen(port, hostname, async () => {
       try {
+        timeoutId = setTimeout(
+          () => {
+            settle(() => reject(new Error('Google sign-in timed out. Please try again.')));
+          },
+          5 * 60 * 1000
+        );
+
         const client = createOAuthClient(runtimeRedirectUri);
 
         const defaultAuthUrl = client.generateAuthUrl({
@@ -153,8 +207,7 @@ export async function runInteractiveOAuthFlow({
 
         await shell.openExternal(authUrl);
       } catch (error) {
-        server.close();
-        reject(error);
+        settle(() => reject(error));
       }
     });
   });

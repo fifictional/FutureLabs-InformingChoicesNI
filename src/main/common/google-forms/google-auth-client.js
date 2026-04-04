@@ -5,7 +5,8 @@ import {
   getAppUserDataPath,
   readEncryptedToken,
   runInteractiveOAuthFlow,
-  saveEncryptedToken
+  saveEncryptedToken,
+  cancelOAuthFlow
 } from './google-oauth-common';
 import { hasCredentialFiles } from './credential-store';
 
@@ -113,6 +114,8 @@ export async function signOut() {
   return true;
 }
 
+export { cancelOAuthFlow };
+
 async function fetchUserProfilePictureBase64(pictureUrl) {
   const response = await fetch(pictureUrl);
   if (!response.ok) {
@@ -127,7 +130,7 @@ async function fetchUserProfilePictureBase64(pictureUrl) {
 export async function getUserProfile() {
   const token = readSavedGoogleToken();
   if (!token) {
-    throw new Error('No Google token found');
+    return null;
   }
 
   const client = createOAuthClient();

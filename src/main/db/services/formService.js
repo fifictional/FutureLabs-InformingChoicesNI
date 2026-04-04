@@ -160,7 +160,8 @@ export async function listForms() {
 
 export async function findFormById(id) {
   await refreshSchemaAndResponses(id);
-  return getDb().select().from(forms).where(eq(forms.id, id)).get();
+  const [row] = await getDb().select().from(forms).where(eq(forms.id, id)).limit(1);
+  return row ?? null;
 }
 
 export async function listFormWithEventNameAndResponseCount() {
@@ -201,7 +202,8 @@ export async function listFormsByEvent(eventId) {
 }
 
 export async function createForm(data) {
-  return getDb()
+  const db = getDb();
+  const [{ id }] = await db
     .insert(forms)
     .values({
       name: data.name,
@@ -211,11 +213,14 @@ export async function createForm(data) {
       eventId: data.eventId,
       schema: serializeSchemaValue(data.schema)
     })
-    .returning();
+    .$returningId();
+  const [row] = await db.select().from(forms).where(eq(forms.id, id)).limit(1);
+  return [row];
 }
 
 export async function deleteForm(id) {
-  return getDb().delete(forms).where(eq(forms.id, id)).returning();
+  await getDb().delete(forms).where(eq(forms.id, id));
+  return [];
 }
 
 export async function updateForm(id, data) {
@@ -226,7 +231,7 @@ export async function updateForm(id, data) {
   }
 
   const payload = data && typeof data === 'object' ? data : {};
-  const existingForm = await db.select().from(forms).where(eq(forms.id, formId)).get();
+  const [existingForm] = await db.select().from(forms).where(eq(forms.id, formId)).limit(1);
   if (!existingForm) {
     throw new Error(`Form with id ${formId} not found`);
   }
@@ -247,11 +252,14 @@ export async function updateForm(id, data) {
     const maybeId = Number(payload.userReferenceQuestionId);
     if (Number.isInteger(maybeId) && maybeId > 0) {
       normalizeReferenceQuestionId = maybeId;
-      referenceQuestion = await db
-        .select({ id: questions.id, text: questions.text, answerType: questions.answerType })
-        .from(questions)
-        .where(and(eq(questions.id, maybeId), eq(questions.formId, formId)))
-        .get();
+      referenceQuestion =
+        (
+          await db
+            .select({ id: questions.id, text: questions.text, answerType: questions.answerType })
+            .from(questions)
+            .where(and(eq(questions.id, maybeId), eq(questions.formId, formId)))
+            .limit(1)
+        )[0] ?? null;
 
       if (!referenceQuestion) {
         throw new Error('Selected reference ID question does not belong to this survey');
@@ -283,12 +291,19 @@ export async function updateForm(id, data) {
   }
 
   const hasFormUpdates = Object.keys(updateData).length > 0;
-  const updatedRows = hasFormUpdates
-    ? await db.update(forms).set(updateData).where(eq(forms.id, formId)).returning()
-    : [existingForm];
+  let updatedRows;
+  if (hasFormUpdates) {
+    await db.update(forms).set(updateData).where(eq(forms.id, formId));
+    const [updated] = await db.select().from(forms).where(eq(forms.id, formId)).limit(1);
+    updatedRows = [updated];
+  } else {
+    updatedRows = [existingForm];
+  }
 
   if (payload.userReferenceQuestionId !== undefined) {
-    await db.run(sql`update submissions set user_reference_id = NULL where form_id = ${formId}`);
+    await db.execute(
+      sql`UPDATE submissions SET user_reference_id = NULL WHERE form_id = ${formId}`
+    );
 
     if (normalizeReferenceQuestionId != null) {
       const submissionRows = await db
@@ -314,8 +329,8 @@ export async function updateForm(id, data) {
         for (const row of referenceResponses) {
           const referenceText = normalizeSubmissionReferenceText(row.valueText);
           if (!referenceText) continue;
-          await db.run(
-            sql`update submissions set user_reference_id = ${referenceText} where id = ${row.submissionId}`
+          await db.execute(
+            sql`UPDATE submissions SET user_reference_id = ${referenceText} WHERE id = ${row.submissionId}`
           );
         }
       }
@@ -326,7 +341,7 @@ export async function updateForm(id, data) {
 }
 
 export async function refreshSchemaAndResponses(formId) {
-  const form = await getDb().select().from(forms).where(eq(forms.id, formId)).get();
+  const [form] = await getDb().select().from(forms).where(eq(forms.id, formId)).limit(1);
   if (!form) {
     throw new Error(`Form with id ${formId} not found`);
   }
@@ -388,14 +403,15 @@ export async function refreshSchemaAndResponses(formId) {
     for (let i = 0; i < questionDefs.length; i++) {
       const def = questionDefs[i];
       const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
-      const [questionRow] = await db
+      const [{ id: questionId }] = await db
         .insert(questions)
         .values({
           formId,
           text: def.title,
           answerType
         })
-        .returning();
+        .$returningId();
+      const questionRow = { id: questionId, formId, text: def.title, answerType };
 
       if (answerType === 'choice' && Array.isArray(def.options) && def.options.length > 0) {
         const seen = new Set();
@@ -453,7 +469,7 @@ export async function refreshSchemaAndResponses(formId) {
         : null;
       const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
 
-      const [submission] = await db
+      const [{ id: submissionId }] = await db
         .insert(submissions)
         .values({
           formId,
@@ -461,7 +477,7 @@ export async function refreshSchemaAndResponses(formId) {
           submittedAt: parseSubmittedAt(response),
           externalId: externalResponseId
         })
-        .returning();
+        .$returningId();
 
       for (let i = 0; i < questionRows.length; i++) {
         const question = questionRows[i];
@@ -471,7 +487,7 @@ export async function refreshSchemaAndResponses(formId) {
 
         const vals = answerToDbValues(answer, question.answerType);
         await db.insert(responses).values({
-          submissionId: submission.id,
+          submissionId,
           questionId: question.id,
           valueText: vals.valueText,
           valueNumber: vals.valueNumber,
