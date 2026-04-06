@@ -6,6 +6,9 @@ import { getDb } from '../client';
 import { events, forms, questionChoice, questions, responses, submissions } from '../schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
+const AUTO_REFRESH_INTERVAL_MS = 60 * 1000;
+const refreshJobsByFormId = new Map();
+
 function serializeSchemaValue(schemaValue) {
   if (schemaValue == null) return null;
   return typeof schemaValue === 'string' ? schemaValue : JSON.stringify(schemaValue);
@@ -31,6 +34,136 @@ function pickText(v) {
   if (v == null) return '';
   if (typeof v === 'string') return v;
   return String(v);
+}
+
+function normalizeQuestionDefinition(def) {
+  if (!def || typeof def !== 'object') {
+    return {
+      questionId: null,
+      itemId: null,
+      title: '',
+      kind: 'unknown',
+      options: []
+    };
+  }
+
+  return {
+    questionId: pickText(def.questionId).trim() || null,
+    itemId: pickText(def.itemId).trim() || null,
+    title: pickText(def.title).trim(),
+    kind: pickText(def.kind).trim() || 'unknown',
+    options: Array.isArray(def.options)
+      ? def.options.map((option) => pickText(option).trim()).filter(Boolean)
+      : [],
+    scale:
+      def.scale && typeof def.scale === 'object'
+        ? {
+            low: def.scale.low ?? null,
+            high: def.scale.high ?? null,
+            lowLabel: pickText(def.scale.lowLabel).trim(),
+            highLabel: pickText(def.scale.highLabel).trim()
+          }
+        : null,
+    rows: Array.isArray(def.rows)
+      ? def.rows.map((row) => pickText(row).trim()).filter(Boolean)
+      : [],
+    columns: Array.isArray(def.columns)
+      ? def.columns.map((column) => pickText(column).trim()).filter(Boolean)
+      : []
+  };
+}
+
+function buildQuestionFingerprint(questionDefs) {
+  return JSON.stringify(
+    (Array.isArray(questionDefs) ? questionDefs : []).map(normalizeQuestionDefinition)
+  );
+}
+
+function parseFormSchemaWithFallback(schemaValue) {
+  const parsed = parseSchemaValue(schemaValue);
+  return parsed && typeof parsed === 'object' ? parsed : {};
+}
+
+function getRefreshState(schemaValue) {
+  const schema = parseFormSchemaWithFallback(schemaValue);
+  const refreshState = schema.refreshState;
+  return refreshState && typeof refreshState === 'object' ? refreshState : {};
+}
+
+function setRefreshStateOnSchema(schemaValue, refreshStatePatch) {
+  const schema = parseFormSchemaWithFallback(schemaValue);
+  const currentRefreshState =
+    schema.refreshState && typeof schema.refreshState === 'object' ? schema.refreshState : {};
+
+  return {
+    ...schema,
+    refreshState: {
+      ...currentRefreshState,
+      ...refreshStatePatch
+    }
+  };
+}
+
+function shouldAutoRefreshForm(form) {
+  if (!form || form.provider !== 'google_forms') return false;
+
+  const refreshState = getRefreshState(form.schema);
+  if (refreshState.accessDenied) {
+    return false;
+  }
+
+  const lastSuccessAtMs = Date.parse(refreshState.lastSuccessAt || '');
+  if (!Number.isFinite(lastSuccessAtMs)) {
+    return true;
+  }
+
+  return Date.now() - lastSuccessAtMs >= AUTO_REFRESH_INTERVAL_MS;
+}
+
+function isGoogleAccessError(error) {
+  const code = Number(error?.code ?? error?.status ?? error?.response?.status);
+  const message = pickText(error?.message).toLowerCase();
+
+  if ([401, 403, 404].includes(code)) {
+    return true;
+  }
+
+  return (
+    message.includes('permission') ||
+    message.includes('forbidden') ||
+    message.includes('unauthorized') ||
+    message.includes('requested entity was not found') ||
+    message.includes('not found') ||
+    message.includes('insufficient authentication') ||
+    message.includes('failed to obtain google authentication client')
+  );
+}
+
+async function markFormRefreshState(formId, schemaValue, refreshStatePatch) {
+  const nextSchema = setRefreshStateOnSchema(schemaValue, refreshStatePatch);
+  await getDb()
+    .update(forms)
+    .set({ schema: serializeSchemaValue(nextSchema) })
+    .where(eq(forms.id, formId));
+  return nextSchema;
+}
+
+async function withFormRefreshLock(formId, work) {
+  const existingJob = refreshJobsByFormId.get(formId);
+  if (existingJob) {
+    return existingJob;
+  }
+
+  const job = (async () => {
+    try {
+      return await work();
+    } finally {
+      refreshJobsByFormId.delete(formId);
+    }
+  })();
+
+  refreshJobsByFormId.set(formId, job);
+  return job;
 }
 function extractGoogleQuestionDefinitions(form) {
   const items = form?.items || [];
@@ -159,7 +292,7 @@ export async function listForms() {
 }
 
 export async function findFormById(id) {
-  await refreshSchemaAndResponses(id);
+  await refreshSchemaAndResponses(id, { force: false });
   const [row] = await getDb().select().from(forms).where(eq(forms.id, id)).limit(1);
   return row ?? null;
 }
@@ -199,6 +332,326 @@ export async function listFormWithEventNameAndResponseCount() {
 export async function listFormsByEvent(eventId) {
   await refreshResponsesAndSchemaForAllGoogleForms();
   return getDb().select().from(forms).where(eq(forms.eventId, eventId));
+}
+
+async function syncQuestionChoices(db, questionId, options) {
+  await db.delete(questionChoice).where(eq(questionChoice.questionId, questionId));
+
+  const seen = new Set();
+  const optionRows = [];
+  for (const rawOption of Array.isArray(options) ? options : []) {
+    const optionText = pickText(rawOption).trim();
+    if (!optionText) continue;
+    const key = optionText.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    optionRows.push({ questionId, choiceText: optionText });
+  }
+
+  if (optionRows.length > 0) {
+    await db.insert(questionChoice).values(optionRows);
+  }
+}
+
+async function rebuildQuestionsForForm(db, formId, questionDefs, responsesByQuestionDef) {
+  const existingQuestions = await db
+    .select({ id: questions.id })
+    .from(questions)
+    .where(eq(questions.formId, formId));
+
+  await db.delete(submissions).where(eq(submissions.formId, formId));
+  for (const q of existingQuestions) {
+    await db.delete(questionChoice).where(eq(questionChoice.questionId, q.id));
+  }
+  await db.delete(questions).where(eq(questions.formId, formId));
+
+  const questionRows = [];
+  for (let i = 0; i < questionDefs.length; i++) {
+    const def = questionDefs[i];
+    const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
+    const [{ id: questionId }] = await db
+      .insert(questions)
+      .values({
+        formId,
+        text: def.title,
+        answerType
+      })
+      .$returningId();
+
+    if (answerType === 'choice') {
+      await syncQuestionChoices(db, questionId, def.options);
+    }
+
+    questionRows.push({
+      id: questionId,
+      formId,
+      text: def.title,
+      answerType,
+      googleQuestionId: def.questionId,
+      questionIndex: i
+    });
+  }
+
+  return questionRows;
+}
+
+async function reuseExistingQuestionsForForm(db, formId, questionDefs, responsesByQuestionDef) {
+  const existingQuestionRows = await db
+    .select()
+    .from(questions)
+    .where(eq(questions.formId, formId));
+  const sortedRows = [...existingQuestionRows].sort(
+    (left, right) => Number(left.id) - Number(right.id)
+  );
+
+  const questionRows = [];
+  for (let i = 0; i < questionDefs.length; i++) {
+    const def = questionDefs[i];
+    const existingRow = sortedRows[i];
+    const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
+
+    if (!existingRow) {
+      throw new Error(`Missing question row for form ${formId} at position ${i}`);
+    }
+
+    if (existingRow.text !== def.title || existingRow.answerType !== answerType) {
+      await db
+        .update(questions)
+        .set({ text: def.title, answerType })
+        .where(eq(questions.id, existingRow.id));
+    }
+
+    if (answerType === 'choice') {
+      await syncQuestionChoices(db, existingRow.id, def.options);
+    } else {
+      await db.delete(questionChoice).where(eq(questionChoice.questionId, existingRow.id));
+    }
+
+    questionRows.push({
+      ...existingRow,
+      text: def.title,
+      answerType,
+      googleQuestionId: def.questionId,
+      questionIndex: i
+    });
+  }
+
+  return questionRows;
+}
+
+async function upsertSubmissionForForm(db, formId, response, userReferenceId) {
+  const externalResponseId = pickText(response?.responseId || '').trim();
+  if (!externalResponseId) {
+    return null;
+  }
+
+  const submittedAt = parseSubmittedAt(response);
+
+  await db
+    .insert(submissions)
+    .values({
+      formId,
+      userReferenceId,
+      submittedAt,
+      externalId: externalResponseId
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        userReferenceId,
+        submittedAt
+      }
+    });
+
+  const [submissionRow] = await db
+    .select({ id: submissions.id, externalId: submissions.externalId })
+    .from(submissions)
+    .where(and(eq(submissions.formId, formId), eq(submissions.externalId, externalResponseId)))
+    .limit(1);
+
+  return submissionRow ?? null;
+}
+
+async function syncResponsesForForm(db, formId, questionRows, googleResponses, referenceQuestion) {
+  const seenExternalIds = new Set();
+
+  for (const response of googleResponses?.responses || []) {
+    const answersObj = response?.answers || {};
+    const answerValuesByIndex = Object.values(answersObj);
+    const userReferenceAnswer = referenceQuestion
+      ? referenceQuestion.googleQuestionId
+        ? answersObj[referenceQuestion.googleQuestionId] || null
+        : answerValuesByIndex[referenceQuestion.questionIndex] || null
+      : null;
+    const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
+
+    const submissionRow = await upsertSubmissionForForm(db, formId, response, userReferenceId);
+    if (!submissionRow) continue;
+
+    seenExternalIds.add(submissionRow.externalId);
+
+    for (let i = 0; i < questionRows.length; i++) {
+      const question = questionRows[i];
+      const answer = question.googleQuestionId
+        ? answersObj[question.googleQuestionId] || null
+        : answerValuesByIndex[i] || null;
+      const vals = answerToDbValues(answer, question.answerType);
+
+      await db
+        .insert(responses)
+        .values({
+          submissionId: submissionRow.id,
+          questionId: question.id,
+          valueText: vals.valueText,
+          valueNumber: vals.valueNumber,
+          valueChoice: vals.valueChoice
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            valueText: vals.valueText,
+            valueNumber: vals.valueNumber,
+            valueChoice: vals.valueChoice
+          }
+        });
+    }
+  }
+
+  const existingSubmissionRows = await db
+    .select({ id: submissions.id, externalId: submissions.externalId })
+    .from(submissions)
+    .where(eq(submissions.formId, formId));
+
+  const staleSubmissionIds = existingSubmissionRows
+    .filter((row) => !seenExternalIds.has(row.externalId))
+    .map((row) => row.id);
+
+  if (staleSubmissionIds.length > 0) {
+    await db.delete(submissions).where(inArray(submissions.id, staleSubmissionIds));
+  }
+}
+
+async function performGoogleFormRefresh(form) {
+  const formId = Number(form.id);
+  const currentSchema = parseFormSchemaWithFallback(form.schema);
+  const googleFormId = pickText(form.externalId).trim();
+
+  if (!googleFormId) {
+    throw new Error(`Form with id ${formId} does not have an externalId`);
+  }
+
+  let configuredReferenceQuestionId = '';
+  try {
+    configuredReferenceQuestionId = pickText(currentSchema?.userReferenceQuestionId).trim();
+  } catch {
+    configuredReferenceQuestionId = '';
+  }
+
+  const refreshAttemptAt = new Date().toISOString();
+
+  try {
+    const [googleFormRes, googleResponses] = await Promise.all([
+      getGoogleFormById(googleFormId),
+      getGoogleFormResponsesById(googleFormId)
+    ]);
+
+    const googleForm = googleFormRes?.data || googleFormRes;
+    const questionDefs = extractGoogleQuestionDefinitions(googleForm);
+    const responsesByQuestionDef = {};
+    for (let i = 0; i < questionDefs.length; i++) {
+      responsesByQuestionDef[i] = [];
+    }
+
+    for (const response of googleResponses?.responses || []) {
+      const answersObj = response?.answers || {};
+      const answerValuesByIndex = Object.values(answersObj);
+
+      for (let i = 0; i < questionDefs.length; i++) {
+        const def = questionDefs[i];
+        const answer = def.questionId
+          ? answersObj[def.questionId] || null
+          : answerValuesByIndex[i] || null;
+
+        if (answer) {
+          responsesByQuestionDef[i].push(answer);
+        }
+      }
+    }
+
+    const nextQuestionFingerprint = buildQuestionFingerprint(questionDefs);
+    const currentQuestionFingerprint = buildQuestionFingerprint(currentSchema.questions);
+
+    const result = await getDb().transaction(async (tx) => {
+      const questionRows =
+        nextQuestionFingerprint === currentQuestionFingerprint &&
+        Array.isArray(currentSchema.questions) &&
+        currentSchema.questions.length === questionDefs.length
+          ? await reuseExistingQuestionsForForm(tx, formId, questionDefs, responsesByQuestionDef)
+          : await rebuildQuestionsForForm(tx, formId, questionDefs, responsesByQuestionDef);
+
+      const referenceQuestion = configuredReferenceQuestionId
+        ? questionRows.find((q) => q.googleQuestionId === configuredReferenceQuestionId) || null
+        : null;
+
+      const schema = {
+        ...currentSchema,
+        source: 'google_forms',
+        googleFormId,
+        userReferenceQuestionId: configuredReferenceQuestionId || null,
+        userReferenceQuestionDbId: referenceQuestion?.id || null,
+        title: pickText(googleForm?.info?.title || form.name),
+        questionHeaders: questionDefs.map((d) => d.title),
+        questions: questionDefs,
+        refreshState: {
+          ...(currentSchema.refreshState && typeof currentSchema.refreshState === 'object'
+            ? currentSchema.refreshState
+            : {}),
+          lastAttemptAt: refreshAttemptAt,
+          lastSuccessAt: refreshAttemptAt,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          accessDenied: false
+        }
+      };
+
+      await tx
+        .update(forms)
+        .set({ schema: serializeSchemaValue(schema) })
+        .where(eq(forms.id, formId));
+
+      await syncResponsesForForm(tx, formId, questionRows, googleResponses, referenceQuestion);
+
+      return {
+        formId,
+        refreshed: true,
+        skipped: false,
+        accessDenied: false,
+        questionCount: questionRows.length,
+        responseCount: Array.isArray(googleResponses?.responses)
+          ? googleResponses.responses.length
+          : 0
+      };
+    });
+
+    return result;
+  } catch (error) {
+    if (!isGoogleAccessError(error)) {
+      throw error;
+    }
+
+    await markFormRefreshState(formId, form.schema, {
+      lastAttemptAt: refreshAttemptAt,
+      lastErrorAt: refreshAttemptAt,
+      lastErrorMessage: pickText(error?.message).trim() || 'Unable to access Google Form',
+      accessDenied: true
+    });
+
+    return {
+      formId,
+      refreshed: false,
+      skipped: true,
+      accessDenied: true,
+      reason: 'google-access-denied'
+    };
+  }
 }
 
 export async function createForm(data) {
@@ -340,170 +793,42 @@ export async function updateForm(id, data) {
   return updatedRows;
 }
 
-export async function refreshSchemaAndResponses(formId) {
-  const [form] = await getDb().select().from(forms).where(eq(forms.id, formId)).limit(1);
-  if (!form) {
-    throw new Error(`Form with id ${formId} not found`);
-  }
-
-  if (form.provider === 'google_forms') {
-    const { externalId } = form;
-    if (!externalId) {
-      throw new Error(`Form with id ${formId} does not have an externalId`);
+export async function refreshSchemaAndResponses(formId, options = {}) {
+  return withFormRefreshLock(Number(formId), async () => {
+    const [form] = await getDb().select().from(forms).where(eq(forms.id, formId)).limit(1);
+    if (!form) {
+      throw new Error(`Form with id ${formId} not found`);
     }
 
-    const googleFormRes = await getGoogleFormById(externalId);
-    const googleForm = googleFormRes?.data || googleFormRes;
-    const googleResponses = await getGoogleFormResponsesById(externalId);
-    const questionDefs = extractGoogleQuestionDefinitions(googleForm);
-    let configuredReferenceQuestionId = '';
-    try {
-      const parsedSchema = form?.schema ? JSON.parse(form.schema) : null;
-      configuredReferenceQuestionId = pickText(parsedSchema?.userReferenceQuestionId).trim();
-    } catch {
-      configuredReferenceQuestionId = '';
+    if (form.provider !== 'google_forms') {
+      return { formId: Number(formId), refreshed: false, skipped: true, reason: 'not-google-form' };
     }
 
-    const db = getDb();
-
-    const existingQuestions = await db
-      .select({ id: questions.id })
-      .from(questions)
-      .where(eq(questions.formId, formId));
-
-    await db.delete(submissions).where(eq(submissions.formId, formId));
-    for (const q of existingQuestions) {
-      await db.delete(questionChoice).where(eq(questionChoice.questionId, q.id));
-    }
-    await db.delete(questions).where(eq(questions.formId, formId));
-
-    // First pass: collect responses by question definition to determine answer types
-    const responsesByQuestionDef = {};
-    for (let i = 0; i < questionDefs.length; i++) {
-      responsesByQuestionDef[i] = [];
+    const force = Boolean(options?.force);
+    if (!force && !shouldAutoRefreshForm(form)) {
+      return { formId: Number(formId), refreshed: false, skipped: true, reason: 'fresh-enough' };
     }
 
-    for (const response of googleResponses?.responses || []) {
-      const answersObj = response?.answers || {};
-      const answerValuesByIndex = Object.values(answersObj);
-
-      for (let i = 0; i < questionDefs.length; i++) {
-        const def = questionDefs[i];
-        const answer = def.questionId
-          ? answersObj[def.questionId] || null
-          : answerValuesByIndex[i] || null;
-
-        if (answer) {
-          responsesByQuestionDef[i].push(answer);
-        }
-      }
-    }
-
-    const questionRows = [];
-    for (let i = 0; i < questionDefs.length; i++) {
-      const def = questionDefs[i];
-      const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
-      const [{ id: questionId }] = await db
-        .insert(questions)
-        .values({
-          formId,
-          text: def.title,
-          answerType
-        })
-        .$returningId();
-      const questionRow = { id: questionId, formId, text: def.title, answerType };
-
-      if (answerType === 'choice' && Array.isArray(def.options) && def.options.length > 0) {
-        const seen = new Set();
-        const optionRows = [];
-        for (const rawOption of def.options) {
-          const optionText = pickText(rawOption).trim();
-          if (!optionText) continue;
-          const key = optionText.toLowerCase();
-          if (seen.has(key)) continue;
-          seen.add(key);
-          optionRows.push({ questionId: questionRow.id, choiceText: optionText });
-        }
-        if (optionRows.length > 0) {
-          await db.insert(questionChoice).values(optionRows);
-        }
-      }
-
-      questionRows.push({
-        ...questionRow,
-        googleQuestionId: def.questionId,
-        answerType,
-        questionIndex: questionRows.length
-      });
-    }
-
-    const referenceQuestion = configuredReferenceQuestionId
-      ? questionRows.find((q) => q.googleQuestionId === configuredReferenceQuestionId) || null
-      : null;
-
-    const schema = {
-      source: 'google_forms',
-      googleFormId: externalId,
-      userReferenceQuestionId: configuredReferenceQuestionId || null,
-      userReferenceQuestionDbId: referenceQuestion?.id || null,
-      title: pickText(googleForm?.info?.title || form.name),
-      questionHeaders: questionDefs.map((d) => d.title),
-      questions: questionDefs
-    };
-
-    await db
-      .update(forms)
-      .set({ schema: serializeSchemaValue(schema) })
-      .where(eq(forms.id, formId));
-
-    for (const response of googleResponses?.responses || []) {
-      const externalResponseId = pickText(response?.responseId || '').trim();
-      if (!externalResponseId) continue;
-
-      const answersObj = response?.answers || {};
-      const answerValuesByIndex = Object.values(answersObj);
-      const userReferenceAnswer = referenceQuestion
-        ? referenceQuestion.googleQuestionId
-          ? answersObj[referenceQuestion.googleQuestionId] || null
-          : answerValuesByIndex[referenceQuestion.questionIndex] || null
-        : null;
-      const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
-
-      const [{ id: submissionId }] = await db
-        .insert(submissions)
-        .values({
-          formId,
-          userReferenceId,
-          submittedAt: parseSubmittedAt(response),
-          externalId: externalResponseId
-        })
-        .$returningId();
-
-      for (let i = 0; i < questionRows.length; i++) {
-        const question = questionRows[i];
-        const answer = question.googleQuestionId
-          ? answersObj[question.googleQuestionId] || null
-          : answerValuesByIndex[i] || null;
-
-        const vals = answerToDbValues(answer, question.answerType);
-        await db.insert(responses).values({
-          submissionId,
-          questionId: question.id,
-          valueText: vals.valueText,
-          valueNumber: vals.valueNumber,
-          valueChoice: vals.valueChoice
-        });
-      }
-    }
-  }
+    return performGoogleFormRefresh(form);
+  });
 }
 
 export async function refreshResponsesAndSchemaForAllGoogleForms() {
   const googleForms = await getDb().select().from(forms).where(eq(forms.provider, 'google_forms'));
 
+  const results = [];
   for (const form of googleForms) {
-    await refreshSchemaAndResponses(form.id);
+    if (!shouldAutoRefreshForm(form)) {
+      results.push({ formId: form.id, refreshed: false, skipped: true, reason: 'fresh-enough' });
+      continue;
+    }
+
+    results.push(await refreshSchemaAndResponses(form.id));
   }
 
-  return { refreshedFormIds: googleForms.map((form) => form.id) };
+  return {
+    refreshedFormIds: results.filter((result) => result?.refreshed).map((result) => result.formId),
+    skippedFormIds: results.filter((result) => result?.skipped).map((result) => result.formId),
+    results
+  };
 }
