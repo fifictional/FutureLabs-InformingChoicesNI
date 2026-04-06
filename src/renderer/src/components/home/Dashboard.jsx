@@ -425,18 +425,18 @@ export default function Dashboard() {
     )}
 
   const ChartCard = ({ title, metricName, children }) => {
-    const cardRef = useRef(null);
-    const chartExportRef = useRef(null);
+    const exportPreviewRef = useRef(null);
     const [exporting, setExporting] = useState(false);
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
     const handleExport = async () => {
-      if (!chartExportRef.current || exporting) {
+      if (!exportPreviewRef.current || exporting) {
         return;
       }
 
       setExporting(true);
       try {
-        await exportElementAsPng(chartExportRef.current, title);
+        await exportElementAsPng(exportPreviewRef.current, title);
       } catch (error) {
         alert(error?.message || 'Failed to export chart image.');
       } finally {
@@ -444,38 +444,97 @@ export default function Dashboard() {
       }
     };
 
+    const openExportDialog = () => {
+      setExportDialogOpen(true);
+    };
+
+    const closeExportDialog = () => {
+      if (exporting) return;
+      setExportDialogOpen(false);
+    };
+
     return (
-      <Card ref={cardRef} elevation={2} sx={{ flex: 1, width: '50%' }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6" fontWeight="bold">
-              {title}
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              <IconButton
-                size="small"
-                aria-label={`Export ${title} as image`}
-                onClick={handleExport}
-                disabled={exporting}
-              >
-                {exporting ? <CircularProgress size={16} /> : <Download fontSize="inherit" />}
-              </IconButton>
-              {metricName ? (
+      <>
+        <Card elevation={2} sx={{ flex: 1, width: '50%' }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6" fontWeight="bold">
+                {title}
+              </Typography>
+              <Stack direction="row" spacing={0.5}>
                 <IconButton
                   size="small"
-                  aria-label={`Configure ${title}`}
-                  onClick={() => openMetricConfig(metricName)}
+                  aria-label={`Export ${title} as image`}
+                  onClick={openExportDialog}
+                  disabled={exporting}
                 >
-                  <Edit fontSize="inherit" />
+                  {exporting ? <CircularProgress size={16} /> : <Download fontSize="inherit" />}
                 </IconButton>
-              ) : null}
-            </Stack>
-          </Box>
-          <Box ref={chartExportRef} sx={{ width: '100%', minWidth: 0 }}>
-            {children}
-          </Box>
-        </CardContent>
-      </Card>
+                {metricName ? (
+                  <IconButton
+                    size="small"
+                    aria-label={`Configure ${title}`}
+                    onClick={() => openMetricConfig(metricName)}
+                  >
+                    <Edit fontSize="inherit" />
+                  </IconButton>
+                ) : null}
+              </Stack>
+            </Box>
+            <Box sx={{ width: '100%', minWidth: 0 }}>
+              {children}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Dialog open={exportDialogOpen} onClose={closeExportDialog} maxWidth="lg" fullWidth>
+          <DialogTitle>Export Chart Image</DialogTitle>
+          <DialogContent dividers>
+            <Box
+              sx={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                backgroundColor: '#ffffff',
+                p: 0,
+                m: 0,
+                overflow: 'visible'
+              }}
+            >
+              <Box
+                ref={exportPreviewRef}
+                sx={{
+                  display: 'inline-flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: '#ffffff',
+                  p: 3,
+                  m: 0,
+                  overflow: 'visible'
+                }}
+              >
+                <Box
+                  sx={{
+                    width: { xs: '100%', md: 980 },
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    overflow: 'visible'
+                  }}
+                >
+                  {children}
+                </Box>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeExportDialog} disabled={exporting}>Cancel</Button>
+            <Button variant="contained" onClick={handleExport} disabled={exporting}>
+              {exporting ? 'Exporting...' : 'Export PNG'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
     )};
 
   const MissingMetricMessage = ({ metricName }) => {

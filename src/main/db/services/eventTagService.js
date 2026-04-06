@@ -35,7 +35,10 @@ export async function listEventTagsForEvent(eventId) {
 }
 
 export async function addTagToEvent(eventId, tagId) {
-  await getDb().insert(eventTagMappings).values({ eventId, tagId }).ignore();
+  await getDb()
+    .insert(eventTagMappings)
+    .values({ eventId, tagId })
+    .onDuplicateKeyUpdate({ set: { eventId } });
   return [];
 }
 

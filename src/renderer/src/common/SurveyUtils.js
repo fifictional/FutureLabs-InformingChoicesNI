@@ -2,6 +2,7 @@ export function providerToSource(form) {
   switch (form.provider) {
     case 'google_forms':
       return 'Google Forms';
+    case 'file':
     case 'local':
       return 'Local' + (form?.schema?.source ? ` (${form.schema.source})` : '');
     default:

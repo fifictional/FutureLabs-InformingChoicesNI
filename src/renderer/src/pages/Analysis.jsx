@@ -98,7 +98,12 @@ function parseResponseValues(response, answerType) {
       return [response.valueNumber];
     }
 
-    const textNumber = Number(response?.valueText);
+    const rawText = String(response?.valueText ?? '').trim();
+    if (!rawText) {
+      return [];
+    }
+
+    const textNumber = Number(rawText);
     if (Number.isFinite(textNumber)) {
       return [textNumber];
     }
@@ -232,6 +237,7 @@ function SavedChartDisplay({
 }) {
   const chartCardRef = useRef(null);
   const chartExportRef = useRef(null);
+  const exportPreviewRef = useRef(null);
   const [dateRangeStart, setDateRangeStart] = useState(chart.configuration?.startDate || '');
   const [dateRangeEnd, setDateRangeEnd] = useState(chart.configuration?.endDate || '');
   const [trendSettings, setTrendSettings] = useState(() =>
@@ -244,6 +250,7 @@ function SavedChartDisplay({
   // drilldown: { axis: 'row'|'col', label: string } | null
   const [drilldown, setDrilldown] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const surveyLookup = Object.fromEntries(surveys.map((survey) => [survey.id, survey]));
   const trendChoiceOptions = collectChoiceOptionsForSelection(chart.configuration?.questionA, surveyLookup);
   const geoChoiceOptions = collectChoiceOptionsForSelection(chart.configuration?.questionB, surveyLookup);
@@ -628,7 +635,7 @@ function SavedChartDisplay({
     };
   };
 
-  const renderChart = () => {
+  const renderChart = ({ exportMode = false } = {}) => {
     if (chart.chartType === 'comparison') {
       const data = buildComparisonChartData();
 
@@ -658,7 +665,7 @@ function SavedChartDisplay({
                   {isRow ? `Row: "${drilldown.label}"` : `Column: "${drilldown.label}"`}
                 </Typography>
               </Stack>
-              <ChoiceBarChart data={barData} />
+              <ChoiceBarChart data={barData} exportMode={exportMode} />
             </Stack>
           );
         }
@@ -669,6 +676,7 @@ function SavedChartDisplay({
             points={data.points}
             onRowClick={(label) => setDrilldown({ axis: 'row', label })}
             onColumnClick={(label) => setDrilldown({ axis: 'col', label })}
+            exportMode={exportMode}
           />
         );
       }
@@ -677,7 +685,7 @@ function SavedChartDisplay({
         return <ScatterComparisonChart points={data.points} />;
       }
 
-      return <StackedHistogramChart values={data.values} />;
+      return <StackedHistogramChart values={data.values} exportMode={exportMode} />;
     }
 
     const data = buildChartData();
@@ -687,7 +695,7 @@ function SavedChartDisplay({
     }
 
     if (data.type === 'number') {
-      return <NumericHistogramChart values={data.values} />;
+      return <NumericHistogramChart values={data.values} exportMode={exportMode} />;
     }
 
     if (data.type === 'needs_choice') {
@@ -711,35 +719,44 @@ function SavedChartDisplay({
     }
 
     if (data.type === 'geo') {
-      return <GeoChart locations={data.locations} />;
+      return <GeoChart locations={data.locations} exportMode={exportMode} />;
     }
 
     if (data.type === 'text') {
-      return <WordCloudChart textValues={data.textValues} />;
+      return <WordCloudChart textValues={data.textValues} exportMode={exportMode} />;
     }
 
     if (data.type === 'text_list') {
       return <TextResponsesList textValues={data.textValues} />;
     }
 
-    return <ChoiceBarChart data={data.data} />;
+    return <ChoiceBarChart data={data.data} exportMode={exportMode} />;
   };
 
   const formattedDate = new Date(chart.updatedAt).toLocaleDateString();
 
   const handleExport = async () => {
-    if (!chartExportRef.current || exporting) {
+    if (!exportPreviewRef.current || exporting) {
       return;
     }
 
     setExporting(true);
     try {
-      await exportElementAsPng(chartExportRef.current, chart.name);
+      await exportElementAsPng(exportPreviewRef.current, chart.name);
     } catch (error) {
       alert(error?.message || 'Failed to export chart image.');
     } finally {
       setExporting(false);
     }
+  };
+
+  const openExportDialog = () => {
+    setExportDialogOpen(true);
+  };
+
+  const closeExportDialog = () => {
+    if (exporting) return;
+    setExportDialogOpen(false);
   };
 
   return (
@@ -801,7 +818,7 @@ function SavedChartDisplay({
               <IconButton
                 size="small"
                 color="primary"
-                onClick={handleExport}
+                onClick={openExportDialog}
                 disabled={exporting}
               >
                 {exporting ? <Refresh fontSize="small" /> : <Download fontSize="small" />}
@@ -925,11 +942,64 @@ function SavedChartDisplay({
           )}
           {/* Export only the rendered chart area (exclude filters and action buttons). */}
           <Box ref={chartExportRef} sx={{ width: '100%', minWidth: 0 }}>
-            {renderChart()}
+            {renderChart({ exportMode: false })}
           </Box>
         </Stack>
       </CardContent>
       </Card>
+
+      <Dialog
+        open={exportDialogOpen}
+        onClose={closeExportDialog}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Export Chart Image</DialogTitle>
+        <DialogContent dividers>
+          <Box
+            sx={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              backgroundColor: '#ffffff',
+              p: 0,
+              m: 0,
+              overflow: 'visible'
+            }}
+          >
+            <Box
+              ref={exportPreviewRef}
+              sx={{
+                display: 'inline-flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: '#ffffff',
+                p: 3,
+                m: 0,
+                overflow: 'visible'
+              }}
+            >
+              <Box
+                sx={{
+                  width: chart.chartType === 'comparison' ? 'max-content' : { xs: '100%', md: 980 },
+                  maxWidth: '100%',
+                  minWidth: 0,
+                  overflow: 'visible'
+                }}
+              >
+                {renderChart({ exportMode: true })}
+              </Box>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeExportDialog} disabled={exporting}>Cancel</Button>
+          <Button variant="contained" onClick={handleExport} disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export PNG'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

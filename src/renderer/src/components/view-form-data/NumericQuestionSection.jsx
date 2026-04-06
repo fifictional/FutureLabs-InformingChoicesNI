@@ -20,10 +20,67 @@ const chartContainer = css`
     height: 320px;
 `;
 
+function isLikertLikeScale(values) {
+    if (!values.length) {
+        return false;
+    }
+
+    const allIntegers = values.every((value) => Number.isInteger(value));
+    if (!allIntegers) {
+        return false;
+    }
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+
+    return range <= 10;
+}
+
+function resolveDiscreteScaleRange(min, max) {
+    if (min >= 1 && max <= 5) {
+        return [1, 5];
+    }
+
+    if (min >= 1 && max <= 7) {
+        return [1, 7];
+    }
+
+    if (min >= 0 && max <= 10) {
+        return [0, 10];
+    }
+
+    return [min, max];
+}
+
+function buildDiscreteSeries(chartData) {
+    if (!chartData?.length) {
+        return [];
+    }
+
+    const values = chartData.map((point) => point.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const [start, end] = resolveDiscreteScaleRange(min, max);
+    const countsByValue = new Map(chartData.map((point) => [point.value, point.count]));
+
+    return Array.from({ length: end - start + 1 }, (_, index) => {
+        const value = start + index;
+        return {
+            value,
+            count: countsByValue.get(value) || 0
+        };
+    });
+}
+
 export default function NumericQuestionSection({ question }) {
     if (!question.stats) {
         return null;
     }
+
+    const numericValues = (question.chartData || []).map((point) => point.value);
+    const useDiscreteScale = isLikertLikeScale(numericValues);
+    const seriesData = useDiscreteScale ? buildDiscreteSeries(question.chartData) : question.chartData;
 
     return (
         <>
@@ -50,19 +107,19 @@ export default function NumericQuestionSection({ question }) {
                 </Stack>
             </Paper>
 
-            {question.chartData.length > 0 ? (
+            {seriesData.length > 0 ? (
                 <Box css={chartContainer}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                            data={question.chartData}
+                            data={seriesData}
                             margin={{ top: 10, right: 24, left: 0, bottom: 18 }}
                         >
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                                 dataKey="value"
-                                type="number"
-                                domain={question.xAxisDomain}
-                                ticks={question.xAxisTicks}
+                                type={useDiscreteScale ? "category" : "number"}
+                                domain={useDiscreteScale ? undefined : question.xAxisDomain}
+                                ticks={useDiscreteScale ? undefined : question.xAxisTicks}
                                 tickFormatter={formatTickLabel}
                                 label={{ value: "Value", position: "insideBottomRight", offset: -5 }}
                             />
@@ -71,7 +128,7 @@ export default function NumericQuestionSection({ question }) {
                                 label={{ value: "Frequency", angle: -90, position: "insideLeft" }}
                             />
                             <Tooltip />
-                            <Bar dataKey="count" fill="#2e7d32" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="count" fill="#2e7d32" radius={[4, 4, 0, 0]} maxBarSize={48} />
                         </BarChart>
                     </ResponsiveContainer>
                 </Box>

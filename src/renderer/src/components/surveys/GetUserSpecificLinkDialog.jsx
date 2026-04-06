@@ -47,8 +47,7 @@ function questionIdHexToEntryDecimal(questionId) {
 
     // Google questionId can be hex (e.g. 422ddb5a) while prefill requires decimal.
     const isHex = /^[0-9a-f]+$/.test(raw);
-    const hasHexLetters = /[a-f]/.test(raw);
-    if (!isHex || !hasHexLetters) return "";
+    if (!isHex) return "";
 
     try {
         return BigInt(`0x${raw}`).toString(10);

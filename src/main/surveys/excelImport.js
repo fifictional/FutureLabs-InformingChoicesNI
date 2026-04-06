@@ -367,7 +367,7 @@ export async function commitExcelImport(
     });
     const [form] = await formService.createForm({
       name: fname,
-      provider: 'local',
+      provider: 'file',
       baseLink: 'https://invalid.invalid/excel-import',
       externalId: extId,
       eventId: ev.id,

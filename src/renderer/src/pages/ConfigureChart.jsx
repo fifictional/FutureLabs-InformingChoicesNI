@@ -100,7 +100,12 @@ function parseResponseValues(response, answerType) {
       return [response.valueNumber];
     }
 
-    const textNumber = Number(response?.valueText);
+    const rawText = String(response?.valueText ?? '').trim();
+    if (!rawText) {
+      return [];
+    }
+
+    const textNumber = Number(rawText);
     if (Number.isFinite(textNumber)) {
       return [textNumber];
     }

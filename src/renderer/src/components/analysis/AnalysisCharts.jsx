@@ -24,8 +24,46 @@ function buildHistogramBins(values, desiredBinCount = 8) {
     return [];
   }
 
+  const allIntegers = values.every((value) => Number.isInteger(value));
+
   const min = Math.min(...values);
   const max = Math.max(...values);
+
+  if (allIntegers && max - min <= 10) {
+    let start = min;
+    let end = max;
+
+    if (min >= 1 && max <= 5) {
+      start = 1;
+      end = 5;
+    } else if (min >= 1 && max <= 7) {
+      start = 1;
+      end = 7;
+    } else if (min >= 0 && max <= 10) {
+      start = 0;
+      end = 10;
+    }
+
+    const bins = Array.from({ length: end - start + 1 }, (_, index) => {
+      const value = start + index;
+      return {
+        index,
+        start: value - 0.5,
+        end: value + 0.5,
+        label: String(value),
+        count: 0
+      };
+    });
+
+    values.forEach((value) => {
+      const index = value - start;
+      if (index >= 0 && index < bins.length) {
+        bins[index].count += 1;
+      }
+    });
+
+    return bins;
+  }
 
   if (min === max) {
     return [
@@ -80,13 +118,24 @@ export function EmptyChart({ message = '' }) {
   );
 }
 
-export function ChoiceBarChart({ data }) {
+export function ChoiceBarChart({ data, exportMode = false }) {
+  const xAxisProps = exportMode
+    ? { interval: 0, angle: 0, textAnchor: 'middle', height: 40 }
+    : { interval: 0, angle: -20, textAnchor: 'end', height: 72 };
+
   return (
     <Box sx={{ width: '100%', minWidth: 0, height: 300, minHeight: 300 }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-        <BarChart data={data} margin={{ top: 8, right: 24, left: 4, bottom: 64 }}>
+        <BarChart
+          data={data}
+          margin={
+            exportMode
+              ? { top: 20, right: 20, left: 20, bottom: 24 }
+              : { top: 8, right: 24, left: 4, bottom: 64 }
+          }
+        >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" interval={0} angle={-20} textAnchor="end" height={72} />
+          <XAxis dataKey="label" {...xAxisProps} />
           <YAxis allowDecimals={false} />
           <Tooltip />
           <Bar dataKey="count" fill="#4f46e5" radius={[4, 4, 0, 0]} />
@@ -96,15 +145,25 @@ export function ChoiceBarChart({ data }) {
   );
 }
 
-export function NumericHistogramChart({ values }) {
+export function NumericHistogramChart({ values, exportMode = false }) {
   const bins = buildHistogramBins(values);
+  const xAxisProps = exportMode
+    ? { interval: 0, angle: 0, textAnchor: 'middle', height: 40 }
+    : { interval: 0, angle: -20, textAnchor: 'end', height: 72 };
 
   return (
     <Box sx={{ width: '100%', minWidth: 0, height: 300, minHeight: 300 }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-        <BarChart data={bins} margin={{ top: 8, right: 24, left: 4, bottom: 64 }}>
+        <BarChart
+          data={bins}
+          margin={
+            exportMode
+              ? { top: 20, right: 20, left: 20, bottom: 24 }
+              : { top: 8, right: 24, left: 4, bottom: 64 }
+          }
+        >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" interval={0} angle={-20} textAnchor="end" height={72} />
+          <XAxis dataKey="label" {...xAxisProps} />
           <YAxis allowDecimals={false} />
           <Tooltip />
           <Bar dataKey="count" fill="#0891b2" radius={[4, 4, 0, 0]} />
@@ -184,7 +243,7 @@ export function ResponseTrendChart({ points, metricLabel }) {
   );
 }
 
-export function WordCloudChart({ textValues }) {
+export function WordCloudChart({ textValues, exportMode = false }) {
   const wrapperRef = useRef(null);
   const [width, setWidth] = useState(0);
   const [layoutWords, setLayoutWords] = useState([]);
@@ -275,7 +334,13 @@ export function WordCloudChart({ textValues }) {
   return (
     <Box
       ref={wrapperRef}
-      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1, minHeight: 260 }}
+      sx={{
+        border: exportMode ? 'none' : '1px solid',
+        borderColor: 'divider',
+        borderRadius: exportMode ? 0 : 1,
+        p: 1,
+        minHeight: 260
+      }}
     >
       <svg width="100%" height={height} viewBox={`0 0 ${Math.max(width, 1)} ${height}`}>
         <g transform={`translate(${Math.max(width, 1) / 2}, ${height / 2})`}>
@@ -306,7 +371,14 @@ export function WordCloudChart({ textValues }) {
   );
 }
 
-export function HeatMapChart({ rowLabels, columnLabels, points, onRowClick, onColumnClick }) {
+export function HeatMapChart({
+  rowLabels,
+  columnLabels,
+  points,
+  onRowClick,
+  onColumnClick,
+  exportMode = false
+}) {
   if (!rowLabels.length || !columnLabels.length) {
     return <EmptyChart />;
   }
@@ -314,11 +386,12 @@ export function HeatMapChart({ rowLabels, columnLabels, points, onRowClick, onCo
   const maxCount = Math.max(...points.map((item) => item.count), 0);
 
   return (
-    <Box sx={{ overflowX: 'auto' }}>
+    <Box sx={{ overflowX: exportMode ? 'visible' : 'auto' }}>
       <Box
         sx={{
           display: 'grid',
           gridTemplateColumns: `minmax(140px, auto) repeat(${columnLabels.length}, minmax(90px, 1fr))`,
+          width: exportMode ? 'max-content' : '100%',
           border: '1px solid',
           borderColor: 'divider'
         }}
@@ -411,7 +484,7 @@ export function ScatterComparisonChart({ points }) {
   );
 }
 
-export function StackedHistogramChart({ values }) {
+export function StackedHistogramChart({ values, exportMode = false }) {
   const allValues = values.map((item) => item.value);
   if (!allValues.length) {
     return <EmptyChart />;
@@ -437,9 +510,22 @@ export function StackedHistogramChart({ values }) {
   return (
     <Box sx={{ width: '100%', minWidth: 0, height: 300, minHeight: 300 }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-        <BarChart data={bins} margin={{ top: 8, right: 24, left: 4, bottom: 64 }}>
+        <BarChart
+          data={bins}
+          margin={
+            exportMode
+              ? { top: 20, right: 20, left: 20, bottom: 24 }
+              : { top: 8, right: 24, left: 4, bottom: 64 }
+          }
+        >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" interval={0} angle={-20} textAnchor="end" height={72} />
+          <XAxis
+            dataKey="label"
+            interval={0}
+            angle={exportMode ? 0 : -20}
+            textAnchor={exportMode ? 'middle' : 'end'}
+            height={exportMode ? 40 : 72}
+          />
           <YAxis allowDecimals={false} />
           <Tooltip />
           {keys.map((key, index) => (
@@ -451,7 +537,7 @@ export function StackedHistogramChart({ values }) {
   );
 }
 
-export function GeoChart({ locations }) {
+export function GeoChart({ locations, exportMode = false }) {
   if (!locations || locations.length === 0) {
     return <EmptyChart message="No geographic data available" />;
   }
@@ -473,7 +559,16 @@ export function GeoChart({ locations }) {
   if (maxRange < 0.5) zoom = 9;
 
   return (
-    <Box sx={{ height: 340, width: '100%', borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+    <Box
+      sx={{
+        height: 340,
+        width: '100%',
+        borderRadius: exportMode ? 0 : 1,
+        overflow: 'hidden',
+        border: exportMode ? 'none' : '1px solid',
+        borderColor: 'divider'
+      }}
+    >
       <MapContainer
         center={[centerLat, centerLng]}
         zoom={zoom}
