@@ -22,6 +22,7 @@ import {
     generateCleanTicks
 } from "../components/view-form-data";
 import { css } from "@emotion/react";
+import { fetchAllPages } from "../common/pagination";
 
 const headerStackCss = css`
     display: flex;
@@ -86,14 +87,16 @@ export default function ViewSurveyData() {
             }
 
             const [formQuestions, formSubmissions, allEvents] = await Promise.all([
-                window.api.questions.listByForm(numericId),
-                window.api.submissions.listByForm(numericId),
-                window.api.events.list()
+                fetchAllPages((offset, limit) => window.api.questions.listByForm(numericId, offset, limit)),
+                fetchAllPages((offset, limit) => window.api.submissions.listByForm(numericId, offset, limit)),
+                fetchAllPages((offset, limit) => window.api.events.list(offset, limit))
             ]);
 
             const responsesBySubmissionPairs = await Promise.all(
                 formSubmissions.map(async (submission) => {
-                    const responses = await window.api.responses.listBySubmission(submission.id);
+                    const responses = await fetchAllPages((offset, limit) =>
+                        window.api.responses.listBySubmission(submission.id, offset, limit)
+                    );
                     return [submission.id, responses];
                 })
             );
@@ -104,7 +107,9 @@ export default function ViewSurveyData() {
             const choicesPairs = await Promise.all(
                 formQuestions.map(async (question) => {
                     try {
-                        const rows = await window.api.questions.listChoicesByQuestion(question.id);
+                        const rows = await fetchAllPages((offset, limit) =>
+                            window.api.questions.listChoicesByQuestion(question.id, offset, limit)
+                        );
                         const options = (rows || [])
                             .map((row) => String(row.choiceText || "").trim())
                             .filter(Boolean);
@@ -134,7 +139,6 @@ export default function ViewSurveyData() {
             const linkedEvent = allEvents.find((event) => event.id === form.eventId);
 
             setSurveyData(form);
-            console.log(form);
             setEventName(linkedEvent?.name || "Unknown event");
             setQuestions(formQuestions);
             setSubmissions(formSubmissions);

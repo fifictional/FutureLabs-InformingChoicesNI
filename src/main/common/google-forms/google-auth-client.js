@@ -9,6 +9,8 @@ import {
   cancelOAuthFlow
 } from './google-oauth-common';
 import { hasCredentialFiles } from './credential-store';
+import { fetchWithTimeout } from '../fetchTimeout.js';
+import { logger } from '../logger.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
@@ -117,7 +119,7 @@ export async function signOut() {
 export { cancelOAuthFlow };
 
 async function fetchUserProfilePictureBase64(pictureUrl) {
-  const response = await fetch(pictureUrl);
+  const response = await fetchWithTimeout(pictureUrl, {}, 10000);
   if (!response.ok) {
     throw new Error(`Failed to fetch user profile picture: ${response.statusText}`);
   }
@@ -135,15 +137,26 @@ export async function getUserProfile() {
 
   const client = createOAuthClient();
   client.setCredentials(token);
-  const response = await client.request({
-    url: 'https://www.googleapis.com/oauth2/v3/userinfo'
-  });
 
-  const userInfo = response.data;
+  try {
+    const response = await client.request({
+      url: 'https://www.googleapis.com/oauth2/v3/userinfo'
+    });
 
-  if (userInfo.picture) {
-    userInfo.pictureBase64 = await fetchUserProfilePictureBase64(userInfo.picture);
+    const userInfo = response.data;
+
+    if (userInfo.picture) {
+      try {
+        userInfo.pictureBase64 = await fetchUserProfilePictureBase64(userInfo.picture);
+      } catch (err) {
+        logger.warn('Failed to fetch user profile picture', err);
+        // Continue without picture
+      }
+    }
+
+    return userInfo;
+  } catch (err) {
+    logger.error('Failed to fetch user profile', err);
+    throw err;
   }
-
-  return userInfo;
 }

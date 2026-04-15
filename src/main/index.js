@@ -7,7 +7,8 @@ import {
   isDbConnected,
   reinitDb,
   runMigrations,
-  testMysqlConnection
+  testMysqlConnection,
+  closeDb
 } from './db/client.js';
 import * as eventService from './db/services/eventService.js';
 import * as eventTagService from './db/services/eventTagService.js';
@@ -39,8 +40,21 @@ import {
 import { getSetting, setSetting, SETTINGS_KEYS } from './common/settings/settings.js';
 import { commitExcelImport, parseExcelImport } from './surveys/excelImport.js';
 import { importGoogleForms } from './surveys/googleFormsImport.js';
+import { logger } from './common/logger.js';
 
 let mainWindow;
+let activeOperationCount = 0;
+
+async function runTrackedOperation(operationName, fn) {
+  activeOperationCount += 1;
+  logger.info(`Operation started: ${operationName}. Active operations: ${activeOperationCount}`);
+  try {
+    return await fn();
+  } finally {
+    activeOperationCount = Math.max(0, activeOperationCount - 1);
+    logger.info(`Operation finished: ${operationName}. Active operations: ${activeOperationCount}`);
+  }
+}
 
 function getMigrationsFolder() {
   return app.isPackaged ? join(process.resourcesPath, 'drizzle') : join(__dirname, '../../drizzle');
@@ -170,116 +184,521 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Clean up database connection on app exit
+app.on('before-quit', async (event) => {
+  if (activeOperationCount > 0) {
+    event.preventDefault();
+    dialog.showErrorBox(
+      'Operation In Progress',
+      'Please wait for the current operation to complete before closing the application.'
+    );
+    return;
+  }
+
+  await closeDb();
+});
+
 // Register IPC handlers, which are wired to the service layer
 
-ipcMain.handle('events:list', () => eventService.listEvents());
-ipcMain.handle('events:findByName', (_event, name) => eventService.findEventByName(name));
-ipcMain.handle('events:listWithSurveyCountsAndTags', () =>
-  eventService.listEventsWithSurveyCountsAndTags()
-);
-ipcMain.handle('events:create', (_event, data) => eventService.createEvent(data));
-ipcMain.handle('events:update', (_event, id, data) => eventService.updateEvent(id, data));
-ipcMain.handle('events:delete', (_event, id) => eventService.deleteEvent(id));
+ipcMain.handle('events:list', async (_event, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await eventService.listEventsPaginated(offset, limit);
+    }
+    return await eventService.listEvents();
+  } catch (err) {
+    logger.error('events:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('events:findByName', async (_event, name) => {
+  try {
+    return await eventService.findEventByName(name);
+  } catch (err) {
+    logger.error('events:findByName failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('events:listWithSurveyCountsAndTags', async () => {
+  try {
+    return await eventService.listEventsWithSurveyCountsAndTags();
+  } catch (err) {
+    logger.error('events:listWithSurveyCountsAndTags failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('events:create', async (_event, data) => {
+  try {
+    return await eventService.createEvent(data);
+  } catch (err) {
+    logger.error('events:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('events:update', async (_event, id, data) => {
+  try {
+    return await eventService.updateEvent(id, data);
+  } catch (err) {
+    logger.error('events:update failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('events:delete', async (_event, id) => {
+  try {
+    return await eventService.deleteEvent(id);
+  } catch (err) {
+    logger.error('events:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('eventTags:list', () => eventTagService.listEventTags());
-ipcMain.handle('eventTags:findBySlug', (_event, slug) => eventTagService.findEventTagBySlug(slug));
-ipcMain.handle('eventTags:create', (_event, data) => eventTagService.createEventTag(data));
-ipcMain.handle('eventTags:delete', (_event, id) => eventTagService.deleteEventTag(id));
-ipcMain.handle('eventTags:listForEvent', (_event, eventId) =>
-  eventTagService.listEventTagsForEvent(eventId)
-);
-ipcMain.handle('eventTags:addToEvent', (_event, eventId, tagId) =>
-  eventTagService.addTagToEvent(eventId, tagId)
-);
-ipcMain.handle('eventTags:removeFromEvent', (_event, eventId, tagId) =>
-  eventTagService.removeTagFromEvent(eventId, tagId)
-);
+ipcMain.handle('eventTags:list', async (_event, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await eventTagService.listEventTagsPaginated(offset, limit);
+    }
+    return await eventTagService.listEventTags();
+  } catch (err) {
+    logger.error('eventTags:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:findBySlug', async (_event, slug) => {
+  try {
+    return await eventTagService.findEventTagBySlug(slug);
+  } catch (err) {
+    logger.error('eventTags:findBySlug failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:create', async (_event, data) => {
+  try {
+    return await eventTagService.createEventTag(data);
+  } catch (err) {
+    logger.error('eventTags:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:delete', async (_event, id) => {
+  try {
+    return await eventTagService.deleteEventTag(id);
+  } catch (err) {
+    logger.error('eventTags:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:listForEvent', async (_event, eventId, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await eventTagService.listEventTagsForEventPaginated(eventId, offset, limit);
+    }
+    return await eventTagService.listEventTagsForEvent(eventId);
+  } catch (err) {
+    logger.error('eventTags:listForEvent failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:addToEvent', async (_event, eventId, tagId) => {
+  try {
+    return await eventTagService.addTagToEvent(eventId, tagId);
+  } catch (err) {
+    logger.error('eventTags:addToEvent failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('eventTags:removeFromEvent', async (_event, eventId, tagId) => {
+  try {
+    return await eventTagService.removeTagFromEvent(eventId, tagId);
+  } catch (err) {
+    logger.error('eventTags:removeFromEvent failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('forms:list', () => formService.listForms());
-ipcMain.handle('forms:findById', (_event, id) => formService.findFormById(id));
-ipcMain.handle('forms:listWithEventNameAndResponseCount', () =>
-  formService.listFormWithEventNameAndResponseCount()
-);
-ipcMain.handle('forms:listByEvent', (_event, eventId) => formService.listFormsByEvent(eventId));
-ipcMain.handle('forms:create', (_event, data) => formService.createForm(data));
-ipcMain.handle('forms:delete', (_event, id) => formService.deleteForm(id));
-ipcMain.handle('forms:update', (_event, id, data) => formService.updateForm(id, data));
-ipcMain.handle('forms:refreshSchemaAndResponses', (_event, id) =>
-  formService.refreshSchemaAndResponses(id, { force: true })
-);
+ipcMain.handle('forms:list', async (_event, offset, limit) => {
+  try {
+    return await formService.listForms(offset, limit);
+  } catch (err) {
+    logger.error('forms:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:findById', async (_event, id) => {
+  try {
+    return await formService.findFormById(id);
+  } catch (err) {
+    logger.error('forms:findById failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:listWithEventNameAndResponseCount', async (_event, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await formService.listFormWithEventNameAndResponseCountPaginated(offset, limit);
+    }
+    return await formService.listFormWithEventNameAndResponseCount();
+  } catch (err) {
+    logger.error('forms:listWithEventNameAndResponseCount failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:listByEvent', async (_event, eventId, offset, limit) => {
+  try {
+    return await formService.listFormsByEvent(eventId, offset, limit);
+  } catch (err) {
+    logger.error('forms:listByEvent failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:create', async (_event, data) => {
+  try {
+    return await formService.createForm(data);
+  } catch (err) {
+    logger.error('forms:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:delete', async (_event, id) => {
+  try {
+    return await formService.deleteForm(id);
+  } catch (err) {
+    logger.error('forms:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:update', async (_event, id, data) => {
+  try {
+    return await formService.updateForm(id, data);
+  } catch (err) {
+    logger.error('forms:update failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('forms:refreshSchemaAndResponses', async (_event, id) => {
+  try {
+    return await runTrackedOperation('forms:refreshSchemaAndResponses', async () => {
+      return await formService.refreshSchemaAndResponses(id, { force: true });
+    });
+  } catch (err) {
+    logger.error('forms:refreshSchemaAndResponses failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('questions:listByForm', (_event, formId) =>
-  questionService.listQuestionsByForm(formId)
-);
-ipcMain.handle('questions:listChoicesByQuestion', (_event, questionId) =>
-  questionService.listQuestionChoicesByQuestion(questionId)
-);
-ipcMain.handle('questions:create', (_event, formId) => questionService.createQuestion(formId));
-ipcMain.handle('questions:delete', (_event, id) => questionService.deleteQuestion(id));
+ipcMain.handle('questions:listByForm', async (_event, formId, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await questionService.listQuestionsByFormPaginated(formId, offset, limit);
+    }
+    return await questionService.listQuestionsByForm(formId);
+  } catch (err) {
+    logger.error('questions:listByForm failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('questions:listChoicesByQuestion', async (_event, questionId, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await questionService.listQuestionChoicesByQuestionPaginated(
+        questionId,
+        offset,
+        limit
+      );
+    }
+    return await questionService.listQuestionChoicesByQuestion(questionId);
+  } catch (err) {
+    logger.error('questions:listChoicesByQuestion failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('questions:create', async (_event, formId) => {
+  try {
+    return await questionService.createQuestion(formId);
+  } catch (err) {
+    logger.error('questions:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('questions:delete', async (_event, id) => {
+  try {
+    return await questionService.deleteQuestion(id);
+  } catch (err) {
+    logger.error('questions:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('submissions:countAll', () => submissionService.countAllSubmissions());
-ipcMain.handle('submissions:listByForm', (_event, formId) =>
-  submissionService.listSubmissionsByForm(formId)
-);
-ipcMain.handle('submissions:create', (_event, data) => submissionService.createSubmission(data));
-ipcMain.handle('submissions:delete', (_event, id) => submissionService.deleteSubmission(id));
+ipcMain.handle('submissions:countAll', async () => {
+  try {
+    return await submissionService.countAllSubmissions();
+  } catch (err) {
+    logger.error('submissions:countAll failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('submissions:listByForm', async (_event, formId, offset, limit) => {
+  try {
+    return await submissionService.listSubmissionsByForm(formId, offset, limit);
+  } catch (err) {
+    logger.error('submissions:listByForm failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('submissions:create', async (_event, data) => {
+  try {
+    return await submissionService.createSubmission(data);
+  } catch (err) {
+    logger.error('submissions:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('submissions:delete', async (_event, id) => {
+  try {
+    return await submissionService.deleteSubmission(id);
+  } catch (err) {
+    logger.error('submissions:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('responses:listBySubmission', (_event, submissionId) =>
-  responseService.listResponsesBySubmission(submissionId)
-);
-ipcMain.handle('responses:upsert', (_event, data) => responseService.upsertResponse(data));
-ipcMain.handle('responses:delete', (_event, id) => responseService.deleteResponse(id));
+ipcMain.handle('responses:listBySubmission', async (_event, submissionId, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await responseService.listResponsesBySubmissionPaginated(submissionId, offset, limit);
+    }
+    return await responseService.listResponsesBySubmission(submissionId);
+  } catch (err) {
+    logger.error('responses:listBySubmission failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('responses:upsert', async (_event, data) => {
+  try {
+    return await responseService.upsertResponse(data);
+  } catch (err) {
+    logger.error('responses:upsert failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('responses:delete', async (_event, id) => {
+  try {
+    return await responseService.deleteResponse(id);
+  } catch (err) {
+    logger.error('responses:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('statistics:listConfigurableMetrics', () =>
-  statisticOverviewService.listConfigurableOverviewMetrics()
-);
-ipcMain.handle('statistics:listSelectableSurveyQuestions', (_event, metricName) =>
-  statisticOverviewService.listSelectableSurveyQuestions(metricName)
-);
-ipcMain.handle('statistics:setMetricQuestion', (_event, metricName, questionId) =>
-  statisticOverviewService.setOverviewMetricQuestion(metricName, questionId)
-);
-ipcMain.handle('statistics:getDashboardOverviewData', (_event, filters) =>
-  statisticOverviewService.getDashboardOverviewData(filters)
-);
+ipcMain.handle('statistics:listConfigurableMetrics', async () => {
+  try {
+    return await statisticOverviewService.listConfigurableOverviewMetrics();
+  } catch (err) {
+    logger.error('statistics:listConfigurableMetrics failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('statistics:listSelectableSurveyQuestions', async (_event, metricName) => {
+  try {
+    return await statisticOverviewService.listSelectableSurveyQuestions(metricName);
+  } catch (err) {
+    logger.error('statistics:listSelectableSurveyQuestions failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('statistics:setMetricQuestion', async (_event, metricName, questionId) => {
+  try {
+    return await statisticOverviewService.setOverviewMetricQuestion(metricName, questionId);
+  } catch (err) {
+    logger.error('statistics:setMetricQuestion failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('statistics:getDashboardOverviewData', async (_event, filters) => {
+  try {
+    return await statisticOverviewService.getDashboardOverviewData(filters);
+  } catch (err) {
+    logger.error('statistics:getDashboardOverviewData failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('clients:list', () => clientService.listClients());
-ipcMain.handle('clients:create', (_event, data) => clientService.createClient(data));
-ipcMain.handle('clients:update', (_event, id, data) => clientService.updateClient(id, data));
-ipcMain.handle('clients:delete', (_event, id) => clientService.deleteClient(id));
-ipcMain.handle('clients:getTotalAppointments', () => clientService.getTotalAppointments());
-ipcMain.handle('clients:setTotalAppointments', (_event, value) =>
-  clientService.setTotalAppointments(value)
-);
-ipcMain.handle('clients:adjustTotalAppointments', (_event, delta) =>
-  clientService.adjustTotalAppointments(delta)
-);
+ipcMain.handle('clients:list', async (_event, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await clientService.listClientsPaginated(offset, limit);
+    }
+    return await clientService.listClients();
+  } catch (err) {
+    logger.error('clients:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:create', async (_event, data) => {
+  try {
+    return await clientService.createClient(data);
+  } catch (err) {
+    logger.error('clients:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:update', async (_event, id, data) => {
+  try {
+    return await clientService.updateClient(id, data);
+  } catch (err) {
+    logger.error('clients:update failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:delete', async (_event, id) => {
+  try {
+    return await clientService.deleteClient(id);
+  } catch (err) {
+    logger.error('clients:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:getTotalAppointments', async () => {
+  try {
+    return await clientService.getTotalAppointments();
+  } catch (err) {
+    logger.error('clients:getTotalAppointments failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:setTotalAppointments', async (_event, value) => {
+  try {
+    return await clientService.setTotalAppointments(value);
+  } catch (err) {
+    logger.error('clients:setTotalAppointments failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('clients:adjustTotalAppointments', async (_event, delta) => {
+  try {
+    return await clientService.adjustTotalAppointments(delta);
+  } catch (err) {
+    logger.error('clients:adjustTotalAppointments failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
 // charts
-ipcMain.handle('charts:list', () => chartService.listCharts());
-ipcMain.handle('charts:findById', (_event, id) => chartService.findChartById(id));
-ipcMain.handle('charts:create', (_event, data) => chartService.createChart(data));
-ipcMain.handle('charts:update', (_event, id, data) => chartService.updateChart(id, data));
-ipcMain.handle('charts:delete', (_event, id) => chartService.deleteChart(id));
-ipcMain.handle('charts:reorder', (_event, chartIds) => chartService.reorderCharts(chartIds));
-ipcMain.handle('charts:parseConfiguration', (_event, chart) =>
-  chartService.parseChartConfiguration(chart)
-);
+ipcMain.handle('charts:list', async (_event, offset, limit) => {
+  try {
+    if (typeof offset === 'number' || typeof limit === 'number') {
+      return await chartService.listChartsPaginated(offset, limit);
+    }
+    return await chartService.listCharts();
+  } catch (err) {
+    logger.error('charts:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:findById', async (_event, id) => {
+  try {
+    return await chartService.findChartById(id);
+  } catch (err) {
+    logger.error('charts:findById failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:create', async (_event, data) => {
+  try {
+    return await chartService.createChart(data);
+  } catch (err) {
+    logger.error('charts:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:update', async (_event, id, data) => {
+  try {
+    return await chartService.updateChart(id, data);
+  } catch (err) {
+    logger.error('charts:update failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:delete', async (_event, id) => {
+  try {
+    return await chartService.deleteChart(id);
+  } catch (err) {
+    logger.error('charts:delete failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:reorder', async (_event, chartIds) => {
+  try {
+    return await chartService.reorderCharts(chartIds);
+  } catch (err) {
+    logger.error('charts:reorder failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('charts:parseConfiguration', async (_event, chart) => {
+  try {
+    return await chartService.parseChartConfiguration(chart);
+  } catch (err) {
+    logger.error('charts:parseConfiguration failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
 // google auth
-ipcMain.handle('googleAuth:isUserAuthenticated', () => isUserAuthenticated());
-ipcMain.handle('googleAuth:ensureAuthenticated', () => ensureAuthenticated());
-ipcMain.handle('googleAuth:getUserProfile', () => getUserProfile());
-ipcMain.handle('googleAuth:signOut', () => signOut());
-ipcMain.handle('googleAuth:cancelOAuthFlow', () => cancelOAuthFlow());
-ipcMain.handle('googleAuth:getSettings', () => ({
-  credentialSourcePath: getSetting(SETTINGS_KEYS.GOOGLE_CREDENTIAL_SOURCE_PATH) || '',
-  credentialPath: getSetting(SETTINGS_KEYS.GOOGLE_RAW_CREDENTIALS_RELATIVE_PATH) || '',
-  encryptedCredentialPath:
-    getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_CREDENTIALS_RELATIVE_PATH) || '',
-  tokenPath: getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH) || '',
-  credentialStatus: getCredentialStatus()
-}));
+ipcMain.handle('googleAuth:isUserAuthenticated', async () => {
+  try {
+    return await isUserAuthenticated();
+  } catch (err) {
+    logger.error('googleAuth:isUserAuthenticated failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleAuth:ensureAuthenticated', async () => {
+  try {
+    return await ensureAuthenticated();
+  } catch (err) {
+    logger.error('googleAuth:ensureAuthenticated failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleAuth:getUserProfile', async () => {
+  try {
+    return await getUserProfile();
+  } catch (err) {
+    logger.error('googleAuth:getUserProfile failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleAuth:signOut', async () => {
+  try {
+    return await signOut();
+  } catch (err) {
+    logger.error('googleAuth:signOut failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleAuth:cancelOAuthFlow', async () => {
+  try {
+    return await cancelOAuthFlow();
+  } catch (err) {
+    logger.error('googleAuth:cancelOAuthFlow failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleAuth:getSettings', async () => {
+  try {
+    return {
+      credentialSourcePath: getSetting(SETTINGS_KEYS.GOOGLE_CREDENTIAL_SOURCE_PATH) || '',
+      credentialPath: getSetting(SETTINGS_KEYS.GOOGLE_RAW_CREDENTIALS_RELATIVE_PATH) || '',
+      encryptedCredentialPath:
+        getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_CREDENTIALS_RELATIVE_PATH) || '',
+      tokenPath: getSetting(SETTINGS_KEYS.GOOGLE_ENCRYPTED_TOKEN_RELATIVE_PATH) || '',
+      credentialStatus: getCredentialStatus()
+    };
+  } catch (err) {
+    logger.error('googleAuth:getSettings failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle('googleAuth:selectCredentialFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select Google credentials.json',
@@ -334,19 +753,48 @@ ipcMain.handle('googleAuth:processCredentialFile', async (_event, sourceFilePath
   }
 });
 
-ipcMain.handle('startup:getReadiness', () => getStartupReadiness());
+ipcMain.handle('startup:getReadiness', async () => {
+  try {
+    return await getStartupReadiness();
+  } catch (err) {
+    logger.error('startup:getReadiness failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
 // google forms
-ipcMain.handle('googleForms:list', (_event, pageToken) => listGoogleForms(pageToken));
-ipcMain.handle('googleForms:create', (_event, title, document_title) =>
-  createGoogleForm(title, document_title)
-);
-ipcMain.handle('googleForms:openInBrowserById', (_event, formId) =>
-  openGoogleFormInBrowserById(formId)
-);
-ipcMain.handle('googleForms:openInBrowserByBaseLink', (_event, baseLink) =>
-  openGoogleFormInBrowserByBaseLink(baseLink)
-);
+ipcMain.handle('googleForms:list', async (_event, pageToken) => {
+  try {
+    return await listGoogleForms(pageToken);
+  } catch (err) {
+    logger.error('googleForms:list failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleForms:create', async (_event, title, document_title) => {
+  try {
+    return await createGoogleForm(title, document_title);
+  } catch (err) {
+    logger.error('googleForms:create failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleForms:openInBrowserById', async (_event, formId) => {
+  try {
+    return await openGoogleFormInBrowserById(formId);
+  } catch (err) {
+    logger.error('googleForms:openInBrowserById failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('googleForms:openInBrowserByBaseLink', async (_event, baseLink) => {
+  try {
+    return await openGoogleFormInBrowserByBaseLink(baseLink);
+  } catch (err) {
+    logger.error('googleForms:openInBrowserByBaseLink failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle('googleForms:listReferenceQuestions', async (_event, formId) => {
   const formRes = await getGoogleFormById(formId);
   const form = formRes?.data || formRes;
@@ -371,12 +819,15 @@ ipcMain.handle('googleForms:importSelected', async (_event, payload) => {
   try {
     const { formIds, eventName, eventDescription, formNameOverride, userReferenceQuestionId } =
       payload || {};
-    const result = await importGoogleForms(formIds, {
-      eventName,
-      eventDescription,
-      formNameOverride,
-      userReferenceQuestionId
+    const result = await runTrackedOperation('googleForms:importSelected', async () => {
+      return await importGoogleForms(formIds, {
+        eventName,
+        eventDescription,
+        formNameOverride,
+        userReferenceQuestionId
+      });
     });
+
     return { ok: true, ...result };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
@@ -395,12 +846,15 @@ ipcMain.handle('surveys:commitExcelImport', async (_event, payload) => {
   try {
     const { buffer, formName, eventName, eventDescription, userReferenceQuestionIndex } =
       payload || {};
-    const result = await commitExcelImport(buffer, {
-      formName,
-      eventName,
-      eventDescription,
-      userReferenceQuestionIndex
+    const result = await runTrackedOperation('surveys:commitExcelImport', async () => {
+      return await commitExcelImport(buffer, {
+        formName,
+        eventName,
+        eventDescription,
+        userReferenceQuestionIndex
+      });
     });
+
     return { ok: true, ...result };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
@@ -425,26 +879,45 @@ ipcMain.on('window:close', () => {
 });
 
 // DB connection settings
-ipcMain.handle('dbSettings:get', () => ({
-  host: getSetting(SETTINGS_KEYS.MYSQL_HOST) || '',
-  port: String(getSetting(SETTINGS_KEYS.MYSQL_PORT) || ''),
-  database: getSetting(SETTINGS_KEYS.MYSQL_DATABASE) || '',
-  user: getSetting(SETTINGS_KEYS.MYSQL_USER) || '',
-  passwordEnvVar: 'DB_PASSWORD',
-  passwordSet: Boolean(process.env.DB_PASSWORD)
-}));
+ipcMain.handle('dbSettings:get', async () => {
+  try {
+    return {
+      host: getSetting(SETTINGS_KEYS.MYSQL_HOST) || '',
+      port: String(getSetting(SETTINGS_KEYS.MYSQL_PORT) || ''),
+      database: getSetting(SETTINGS_KEYS.MYSQL_DATABASE) || '',
+      user: getSetting(SETTINGS_KEYS.MYSQL_USER) || '',
+      passwordEnvVar: 'DB_PASSWORD',
+      passwordSet: Boolean(process.env.DB_PASSWORD)
+    };
+  } catch (err) {
+    logger.error('dbSettings:get failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
-ipcMain.handle('dbSettings:isConnected', () => isDbConnected());
+ipcMain.handle('dbSettings:isConnected', async () => {
+  try {
+    return await isDbConnected();
+  } catch (err) {
+    logger.error('dbSettings:isConnected failed', err);
+    return { ok: false, error: err.message };
+  }
+});
 
 ipcMain.handle('dbSettings:testConnection', async (_event, config) => {
-  const testConfig = {
-    host: config.host || '',
-    port: Number(config.port) || 0,
-    database: config.database || '',
-    user: config.user || '',
-    password: process.env.DB_PASSWORD || ''
-  };
-  return testMysqlConnection(testConfig);
+  try {
+    const testConfig = {
+      host: config.host || '',
+      port: Number(config.port) || 0,
+      database: config.database || '',
+      user: config.user || '',
+      password: process.env.DB_PASSWORD || ''
+    };
+    return await testMysqlConnection(testConfig);
+  } catch (err) {
+    logger.error('dbSettings:testConnection failed', err);
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('dbSettings:saveAndConnect', async (_event, config) => {
@@ -464,14 +937,16 @@ ipcMain.handle('dbSettings:saveAndConnect', async (_event, config) => {
 
 ipcMain.handle('dbSettings:setupDatabase', async (_event, config) => {
   try {
-    setSetting(SETTINGS_KEYS.MYSQL_HOST, config.host || '');
-    setSetting(SETTINGS_KEYS.MYSQL_PORT, Number(config.port) || '');
-    setSetting(SETTINGS_KEYS.MYSQL_DATABASE, config.database || '');
-    setSetting(SETTINGS_KEYS.MYSQL_USER, config.user || '');
+    return await runTrackedOperation('dbSettings:setupDatabase', async () => {
+      setSetting(SETTINGS_KEYS.MYSQL_HOST, config.host || '');
+      setSetting(SETTINGS_KEYS.MYSQL_PORT, Number(config.port) || '');
+      setSetting(SETTINGS_KEYS.MYSQL_DATABASE, config.database || '');
+      setSetting(SETTINGS_KEYS.MYSQL_USER, config.user || '');
 
-    await reinitDb();
+      await reinitDb();
 
-    return { ok: isDbConnected() };
+      return { ok: isDbConnected() };
+    });
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -479,13 +954,15 @@ ipcMain.handle('dbSettings:setupDatabase', async (_event, config) => {
 
 ipcMain.handle('dbSettings:migrateSchema', async () => {
   try {
-    const migrationsFolder = app.isPackaged
-      ? join(process.resourcesPath, 'drizzle')
-      : join(__dirname, '../../drizzle');
+    return await runTrackedOperation('dbSettings:migrateSchema', async () => {
+      const migrationsFolder = app.isPackaged
+        ? join(process.resourcesPath, 'drizzle')
+        : join(__dirname, '../../drizzle');
 
-    await runMigrations(migrationsFolder);
+      await runMigrations(migrationsFolder);
 
-    return { ok: true };
+      return { ok: true };
+    });
   } catch (err) {
     return { ok: false, error: err.message };
   }

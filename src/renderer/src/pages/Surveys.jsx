@@ -1,4 +1,4 @@
-import { Divider } from "@mui/material";
+import { Divider, Alert, Stack } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import SurveysHeader from "../components/surveys/SurveysHeader";
 import SurveysToolbar from "../components/surveys/SurveysToolbar";
@@ -11,6 +11,7 @@ export default function Surveys() {
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(false);
+  const [error, setError] = useState(null);
 
   const selectedSurveyObject = useMemo(() => {
     if (!selectedSurvey) return null;
@@ -20,12 +21,13 @@ export default function Surveys() {
   useEffect(() => {
     async function fetchForms() {
       setLoading(true);
+      setError(null);
       try {
         const formList = await window.api.forms.listWithEventNameAndResponseCount();
         setForms(formList);
       } catch (err) {
         console.error("Failed to fetch forms", err);
-        window.alert("Failed to fetch forms. Please try again.");
+        setError(err?.message || "Failed to fetch forms. Please check your database connection and try again.");
       } finally {
         setLoading(false);
       }
@@ -42,6 +44,13 @@ export default function Surveys() {
 
   return (
     <ContainerWithBackground>
+      {error && (
+        <Stack sx={{ mb: 2 }}>
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        </Stack>
+      )}
         <SurveysHeader
           selectedSurveyObject={selectedSurveyObject}
           onRefresh={triggerRefresh}

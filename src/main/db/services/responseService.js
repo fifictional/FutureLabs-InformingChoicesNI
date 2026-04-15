@@ -6,6 +6,16 @@ export async function listResponsesBySubmission(submissionId) {
   return getDb().select().from(responses).where(eq(responses.submissionId, submissionId));
 }
 
+export async function listResponsesBySubmissionPaginated(submissionId, offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(responses).where(eq(responses.submissionId, submissionId));
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
+}
+
 export async function upsertResponse(data) {
   const db = getDb();
   await db

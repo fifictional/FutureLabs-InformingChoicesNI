@@ -14,6 +14,7 @@ import {
     Typography
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { fetchAllPages } from "../../common/pagination";
 
 function toBaseFormLink(survey) {
     const externalId = String(survey?.externalId || "").trim();
@@ -122,7 +123,9 @@ export default function GetUserSpecificLinkDialog({ open, onClose, survey }) {
             if (!open || !survey?.id) return;
             setLoadingQuestions(true);
             try {
-                const rows = await window.api.questions.listByForm(survey.id);
+                const rows = await fetchAllPages((offset, limit) =>
+                    window.api.questions.listByForm(survey.id, offset, limit)
+                );
                 setDbQuestions(Array.isArray(rows) ? rows : []);
             } catch {
                 setDbQuestions([]);

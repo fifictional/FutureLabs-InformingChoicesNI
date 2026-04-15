@@ -6,6 +6,12 @@ export async function listEvents() {
   return getDb().select().from(events);
 }
 
+export async function listEventsPaginated(offset = 0, limit = 100) {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = Math.min(1000, Math.max(1, Number(limit) || 100));
+  return getDb().select().from(events).limit(safeLimit).offset(safeOffset);
+}
+
 export async function findEventByName(name) {
   const result = await getDb().select().from(events).where(eq(events.name, name)).limit(1);
   return result.length > 0 ? result[0] : null;

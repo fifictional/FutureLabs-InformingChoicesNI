@@ -1,8 +1,18 @@
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
+import { logger } from '../logger.js';
 
-const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+function getSettingsPath() {
+  try {
+    if (app?.isReady?.()) {
+      return path.join(app.getPath('userData'), 'settings.json');
+    }
+  } catch {
+    // Ignore and fall back to process cwd.
+  }
+  return path.join(process.cwd(), 'settings.json');
+}
 
 export const SETTINGS_KEYS = {
   GOOGLE_CREDENTIAL_SOURCE_PATH: 'googleCredentialSourcePath',
@@ -28,6 +38,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 function loadSettings() {
+  const settingsPath = getSettingsPath();
   if (!fs.existsSync(settingsPath)) {
     return { ...DEFAULT_SETTINGS };
   }
@@ -36,13 +47,35 @@ function loadSettings() {
     const data = fs.readFileSync(settingsPath, 'utf-8');
     const parsed = JSON.parse(data);
     return { ...DEFAULT_SETTINGS, ...parsed };
-  } catch {
+  } catch (err) {
+    logger.error('Failed to load settings, using defaults', err);
     return { ...DEFAULT_SETTINGS };
   }
 }
 
+/**
+ * Atomically write settings to file using temp file + rename
+ * This prevents corruption if process crashes during write
+ */
 function saveSettings(settings) {
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  const settingsPath = getSettingsPath();
+  try {
+    const dir = path.dirname(settingsPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Write to temporary file first
+    const tempPath = `${settingsPath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2), 'utf-8');
+
+    // Atomic rename on most file systems
+    fs.renameSync(tempPath, settingsPath);
+    logger.info('Settings saved successfully');
+  } catch (err) {
+    logger.error('Failed to save settings', err);
+    throw new Error(`Failed to save settings: ${err.message}`);
+  }
 }
 
 export function setSetting(key, value) {

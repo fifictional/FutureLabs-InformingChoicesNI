@@ -1,5 +1,6 @@
 import { Autocomplete, TextField } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { fetchAllPages } from "../../common/pagination";
 
 export default function EventSelectorAutocomplete({
   value,
@@ -18,7 +19,7 @@ export default function EventSelectorAutocomplete({
     async function fetchEvents() {
       setLoadingEvents(true);
       try {
-        const rows = await window.api.events.list();
+        const rows = await fetchAllPages((offset, limit) => window.api.events.list(offset, limit));
         setEvents(Array.isArray(rows) ? rows : []);
       } catch {
         setEvents([]);

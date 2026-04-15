@@ -2,6 +2,7 @@
 
 import { ArrowBack, Save } from '@mui/icons-material';
 import {
+  Alert,
   Autocomplete,
   Backdrop,
   CircularProgress,
@@ -47,6 +48,7 @@ import {
   selectionCoversSurveyIds
 } from '../common/geoUtils.js';
 import QuestionSelectorDialog from '../components/analysis/QuestionSelectorDialog.jsx';
+import { fetchAllPages } from '../common/pagination';
 
 // Import utility functions from Analysis.jsx
 function normalizeQuestionText(text) {
@@ -695,6 +697,7 @@ export default function ConfigureChart() {
   const { chartId } = useParams();
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [chartName, setChartName] = useState('');
   const [chartType, setChartType] = useState('question');
   const [block, setBlock] = useState({
@@ -746,7 +749,9 @@ export default function ConfigureChart() {
 
       try {
         const [forms, events] = await Promise.all([
-          window.api.forms.listWithEventNameAndResponseCount(),
+          fetchAllPages((offset, limit) =>
+            window.api.forms.listWithEventNameAndResponseCount(offset, limit)
+          ),
           window.api.events.listWithSurveyCountsAndTags()
         ]);
 
@@ -755,8 +760,12 @@ export default function ConfigureChart() {
         const surveyRows = await Promise.all(
           forms.map(async (form) => {
             const [questionRows, submissionRows] = await Promise.all([
-              window.api.questions.listByForm(form.id),
-              window.api.submissions.listByForm(form.id)
+              fetchAllPages((offset, limit) =>
+                window.api.questions.listByForm(form.id, offset, limit)
+              ),
+              fetchAllPages((offset, limit) =>
+                window.api.submissions.listByForm(form.id, offset, limit)
+              )
             ]);
 
             const choicePairs = await Promise.all(
@@ -765,7 +774,9 @@ export default function ConfigureChart() {
                   return [question.id, []];
                 }
 
-                const rows = await window.api.questions.listChoicesByQuestion(question.id);
+                const rows = await fetchAllPages((offset, limit) =>
+                  window.api.questions.listChoicesByQuestion(question.id, offset, limit)
+                );
                 const values = rows
                   .map((row) => String(row.choiceText || '').trim())
                   .filter(Boolean);
@@ -775,7 +786,9 @@ export default function ConfigureChart() {
 
             const responsePairs = await Promise.all(
               submissionRows.map(async (submission) => {
-                const rows = await window.api.responses.listBySubmission(submission.id);
+                const rows = await fetchAllPages((offset, limit) =>
+                  window.api.responses.listBySubmission(submission.id, offset, limit)
+                );
                 return [submission.id, rows];
               })
             );
@@ -1542,7 +1555,7 @@ export default function ConfigureChart() {
 
   const handleSave = async () => {
     if (!chartName.trim()) {
-      alert('Please enter a chart name');
+      setErrorMessage('Please enter a chart name');
       return;
     }
 
@@ -1562,7 +1575,7 @@ export default function ConfigureChart() {
       navigate('/analysis');
     } catch (error) {
       console.error('Failed to save chart', error);
-      alert('Failed to save chart. Please try again.');
+      setErrorMessage('Failed to save chart. Please try again.');
     }
   };
 
@@ -1583,6 +1596,12 @@ export default function ConfigureChart() {
   return (
     <ContainerWithBackground>
       <Stack spacing={3}>
+        {errorMessage && (
+          <Alert severity="error" onClose={() => setErrorMessage('')}>
+            {errorMessage}
+          </Alert>
+        )}
+
         {/* Header with back button */}
         <Stack direction="row" alignItems="center" spacing={2}>
           <Button

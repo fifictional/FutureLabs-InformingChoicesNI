@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import EventSelectorAutocomplete from "../events/EventSelectorAutocomplete.jsx";
 import CreateEventDialog from "../events/CreateEventDialog.jsx";
+import { fetchAllPages } from "../../common/pagination";
 
 function normalizeSchema(schemaValue) {
     if (!schemaValue) return null;
@@ -70,7 +71,9 @@ export default function EditSurveyDialog({ open, handleClose, survey, onEdit, ..
 
             setLoadingReferenceQuestions(true);
             try {
-                const allQuestions = await window.api.questions.listByForm(survey.id);
+                const allQuestions = await fetchAllPages((offset, limit) =>
+                    window.api.questions.listByForm(survey.id, offset, limit)
+                );
                 const textQuestions = (Array.isArray(allQuestions) ? allQuestions : []).filter(
                     (question) => question.answerType === 'text'
                 );

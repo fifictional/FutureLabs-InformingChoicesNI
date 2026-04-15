@@ -286,9 +286,15 @@ function parseSubmittedAt(resp) {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
-export async function listForms() {
+export async function listForms(offset = 0, limit = null) {
   await refreshResponsesAndSchemaForAllGoogleForms();
-  return getDb().select().from(forms);
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(forms);
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
 }
 
 export async function findFormById(id) {
@@ -329,9 +335,54 @@ export async function listFormWithEventNameAndResponseCount() {
   }));
 }
 
-export async function listFormsByEvent(eventId) {
+export async function listFormWithEventNameAndResponseCountPaginated(offset = 0, limit = null) {
   await refreshResponsesAndSchemaForAllGoogleForms();
-  return getDb().select().from(forms).where(eq(forms.eventId, eventId));
+  const db = getDb();
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+
+  const query = db
+    .select({
+      id: forms.id,
+      name: forms.name,
+      provider: forms.provider,
+      baseLink: forms.baseLink,
+      externalId: forms.externalId,
+      eventId: forms.eventId,
+      schema: forms.schema,
+      eventName: events.name,
+      responseCount: db.$count(submissions, eq(submissions.formId, forms.id))
+    })
+    .from(forms)
+    .leftJoin(events, eq(events.id, forms.eventId));
+
+  const result =
+    safeLimit == null
+      ? await query
+      : await query.limit(safeLimit).offset(Math.max(0, Number(offset) || 0));
+
+  const safeJsonParse = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  };
+
+  return result.map((form) => ({
+    ...form,
+    schema: form.schema ? safeJsonParse(form.schema) : form.schema
+  }));
+}
+
+export async function listFormsByEvent(eventId, offset = 0, limit = null) {
+  await refreshResponsesAndSchemaForAllGoogleForms();
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(forms).where(eq(forms.eventId, eventId));
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
 }
 
 async function syncQuestionChoices(db, questionId, options) {

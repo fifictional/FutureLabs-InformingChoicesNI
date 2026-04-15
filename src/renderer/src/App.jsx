@@ -13,6 +13,7 @@ import GoogleFormsImportPage from "./pages/GoogleFormsImportPage";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import { AuthProvider, useAuth } from "./common/AuthContext";
+import ErrorBoundary from "./common/ErrorBoundary";
 
 function AppRoutes() {
   const { authVersion } = useAuth();
@@ -44,9 +45,11 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

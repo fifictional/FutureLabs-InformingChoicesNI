@@ -13,6 +13,7 @@ import {
 import { DataGrid } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 import ContainerWithBackground from '../components/common/ContainerWithBackground';
+import { fetchAllPages } from '../common/pagination';
 
 function formatDate(value) {
   if (!value) return '';
@@ -40,7 +41,7 @@ export default function Clients() {
       setError('');
       try {
         const [clientRows, appointments] = await Promise.all([
-          window.api.clients.list(),
+          fetchAllPages((offset, limit) => window.api.clients.list(offset, limit)),
           window.api.clients.getTotalAppointments()
         ]);
         setClients(Array.isArray(clientRows) ? clientRows : []);

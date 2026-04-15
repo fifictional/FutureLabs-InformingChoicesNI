@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SortIcon from '@mui/icons-material/Sort';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { fetchAllPages } from "../../common/pagination";
 
 export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternateSubtitle }) {
     const theme = useTheme();
@@ -15,6 +18,9 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
     const [refresh, setRefresh] = useState(false);
     const [filterValue, setFilterValue] = useState('');
     const [sortBy, setSortBy] = useState('modifiedTimeDesc');
+    const [currentPageToken, setCurrentPageToken] = useState('');
+    const [nextPageToken, setNextPageToken] = useState('');
+    const [previousPageTokens, setPreviousPageTokens] = useState([]);
 
     const filterOptions = useMemo(() => {
         return forms.map(form => ({
@@ -114,11 +120,13 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
             setLoading(true); 
             setError(null);
             try {
-                const response = await window.api.googleForms.list();
-                const alreadyImportedForms = await window.api.forms.list();
+                const response = await window.api.googleForms.list(currentPageToken || undefined);
+                const alreadyImportedForms = await fetchAllPages((offset, limit) =>
+                    window.api.forms.list(offset, limit)
+                );
 
-                if (!response || !response.files) {
-                    throw new Error('Invalid response from Google Drive API');
+                if (!response || response.ok === false || !Array.isArray(response.files)) {
+                    throw new Error(response?.error || 'Invalid response from Google Drive API');
                 }
 
                 // Filter out forms that have already been imported based on their IDs
@@ -127,15 +135,18 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                 });
 
                 setForms(filteredForms);
+                setNextPageToken(response.nextPageToken || '');
             } catch (error) {
                 setError(error.message);
+                setForms([]);
+                setNextPageToken('');
             } finally {
                 setLoading(false);
             }
         }
 
         fetchForms();
-    }, [refresh]);
+    }, [refresh, currentPageToken]);
 
     // endregion
 
@@ -144,6 +155,29 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
         setSortBy(criteria);
         setSortMenuAnchorEl(null);
     }
+
+    const handleRefresh = () => {
+        setCurrentPageToken('');
+        setNextPageToken('');
+        setPreviousPageTokens([]);
+        setSelectedFormIds([]);
+        setRefresh(prev => !prev);
+    };
+
+    const handleNextPage = () => {
+        if (!nextPageToken || loading) return;
+        setPreviousPageTokens(prev => [...prev, currentPageToken]);
+        setCurrentPageToken(nextPageToken);
+        setSelectedFormIds([]);
+    };
+
+    const handlePreviousPage = () => {
+        if (!previousPageTokens.length || loading) return;
+        const previousToken = previousPageTokens[previousPageTokens.length - 1] || '';
+        setPreviousPageTokens(prev => prev.slice(0, -1));
+        setCurrentPageToken(previousToken);
+        setSelectedFormIds([]);
+    };
 
     const toggleSelectCard = (formId) => {
         if (selectedFormIds.includes(formId)) {
@@ -204,8 +238,24 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                             <MenuItem onClick={() => handleSortSelect("nameDesc")}>name Z-A</MenuItem>
                         </Menu>
                     </span>
-                    <IconButton color="primary" onClick={() => setRefresh(prev => !prev)} disabled={loading}>
+                    <IconButton color="primary" onClick={handleRefresh} disabled={loading}>
                         <RefreshIcon />
+                    </IconButton>
+                    <IconButton
+                        color="primary"
+                        onClick={handlePreviousPage}
+                        disabled={loading || previousPageTokens.length === 0}
+                        title="Previous page"
+                    >
+                        <ChevronLeftIcon />
+                    </IconButton>
+                    <IconButton
+                        color="primary"
+                        onClick={handleNextPage}
+                        disabled={loading || !nextPageToken}
+                        title="Next page"
+                    >
+                        <ChevronRightIcon />
                     </IconButton>
                     <Button
                         css={css`margin-left: 0.5em;`}
@@ -219,6 +269,14 @@ export function GoogleFormPicker({ onSubmit, onCancel, alternateTitle, alternate
                     >
                         {alternateSubtitle || "Import Selected"}
                     </Button>
+                </Stack>
+                <Stack direction="row" justifyContent="space-between" sx={{ py: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        {previousPageTokens.length > 0 ? `Page ${previousPageTokens.length + 1}` : 'Page 1'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {nextPageToken ? 'More pages available' : 'Last page'}
+                    </Typography>
                 </Stack>
                 <Divider />
                 <Grid padding="1em 0" container spacing={3} justifyContent={"space-between"}>

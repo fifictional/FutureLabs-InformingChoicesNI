@@ -2,6 +2,7 @@
 
 import { Add, Delete, Download, DragIndicator, Edit, Refresh } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -46,6 +47,7 @@ import {
   selectionCoversSurveyIds
 } from '../common/geoUtils.js';
 import { exportElementAsPng } from '../common/exportChartImage.js';
+import { fetchAllPages } from '../common/pagination';
 
 function toDateMs(value) {
   if (!value) return null;
@@ -227,6 +229,7 @@ function SavedChartDisplay({
   surveys,
   onConfigure,
   onDelete,
+  onError,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -744,7 +747,7 @@ function SavedChartDisplay({
     try {
       await exportElementAsPng(exportPreviewRef.current, chart.name);
     } catch (error) {
-      alert(error?.message || 'Failed to export chart image.');
+      onError?.(error?.message || 'Failed to export chart image.');
     } finally {
       setExporting(false);
     }
@@ -1008,6 +1011,7 @@ export default function Analysis() {
   const navigate = useNavigate();
   const [surveys, setSurveys] = useState([]);
   const [charts, setCharts] = useState([]);
+  const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chartToDelete, setChartToDelete] = useState(null);
@@ -1026,7 +1030,9 @@ export default function Analysis() {
       try {
         // Load forms and events data
         const [forms, events] = await Promise.all([
-          window.api.forms.listWithEventNameAndResponseCount(),
+          fetchAllPages((offset, limit) =>
+            window.api.forms.listWithEventNameAndResponseCount(offset, limit)
+          ),
           window.api.events.listWithSurveyCountsAndTags()
         ]);
 
@@ -1035,8 +1041,12 @@ export default function Analysis() {
         const surveyRows = await Promise.all(
           forms.map(async (form) => {
             const [questionRows, submissionRows] = await Promise.all([
-              window.api.questions.listByForm(form.id),
-              window.api.submissions.listByForm(form.id)
+              fetchAllPages((offset, limit) =>
+                window.api.questions.listByForm(form.id, offset, limit)
+              ),
+              fetchAllPages((offset, limit) =>
+                window.api.submissions.listByForm(form.id, offset, limit)
+              )
             ]);
 
             const choicePairs = await Promise.all(
@@ -1045,7 +1055,9 @@ export default function Analysis() {
                   return [question.id, []];
                 }
 
-                const rows = await window.api.questions.listChoicesByQuestion(question.id);
+                const rows = await fetchAllPages((offset, limit) =>
+                  window.api.questions.listChoicesByQuestion(question.id, offset, limit)
+                );
                 const values = rows
                   .map((row) => String(row.choiceText || '').trim())
                   .filter(Boolean);
@@ -1055,7 +1067,9 @@ export default function Analysis() {
 
             const responsePairs = await Promise.all(
               submissionRows.map(async (submission) => {
-                const rows = await window.api.responses.listBySubmission(submission.id);
+                const rows = await fetchAllPages((offset, limit) =>
+                  window.api.responses.listBySubmission(submission.id, offset, limit)
+                );
                 return [submission.id, rows];
               })
             );
@@ -1114,7 +1128,9 @@ export default function Analysis() {
           setSurveys(surveyRows);
 
           // Load saved charts
-          const savedCharts = await window.api.charts.list();
+          const savedCharts = await fetchAllPages((offset, limit) =>
+            window.api.charts.list(offset, limit)
+          );
           const enrichedCharts = savedCharts.map((chart) => ({
             ...chart,
             configuration: JSON.parse(chart.configuration)
@@ -1159,7 +1175,7 @@ export default function Analysis() {
       setAddChartDialogOpen(false);
     } catch (error) {
       console.error('Failed to create chart', error);
-      alert('Failed to create chart');
+      setErrorMessage('Failed to create chart');
     }
   };
 
@@ -1181,7 +1197,7 @@ export default function Analysis() {
         setChartToDelete(null);
       } catch (error) {
         console.error('Failed to delete chart', error);
-        alert('Failed to delete chart');
+        setErrorMessage('Failed to delete chart');
       }
     }
   };
@@ -1241,7 +1257,7 @@ export default function Analysis() {
     } catch (error) {
       console.error('Failed to reorder charts', error);
       setCharts(previousCharts);
-      alert('Failed to save chart order');
+      setErrorMessage('Failed to save chart order');
     } finally {
       setSavingOrder(false);
       handleDragEnd();
@@ -1251,6 +1267,12 @@ export default function Analysis() {
   return (
     <ContainerWithBackground>
       <Stack spacing={2.5}>
+        {errorMessage && (
+          <Alert severity="error" onClose={() => setErrorMessage('')}>
+            {errorMessage}
+          </Alert>
+        )}
+
         {/* Header */}
         <Stack
           direction="row"
@@ -1314,6 +1336,7 @@ export default function Analysis() {
               surveys={surveys}
               onConfigure={handleConfigure}
               onDelete={handleDeleteClick}
+              onError={setErrorMessage}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragOver={handleDragOver}

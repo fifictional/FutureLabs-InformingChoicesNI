@@ -62,6 +62,17 @@ export async function listClients() {
   return db.select().from(clients);
 }
 
+export async function listClientsPaginated(offset = 0, limit = null) {
+  const db = getDb();
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = db.select().from(clients);
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
+}
+
 export async function createClient(data) {
   const db = getDb();
   const initials = normalizeIdentifier(data?.nonConfidentialIdentifier);

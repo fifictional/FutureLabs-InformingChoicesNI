@@ -7,6 +7,8 @@ import {
   getGoogleFormById,
   getGoogleFormResponsesById
 } from '../common/google-forms/google-forms.js';
+import { getDb } from '../db/client.js';
+import { logger } from '../common/logger.js';
 
 function pickText(v) {
   if (v == null) return '';
@@ -175,138 +177,146 @@ export async function importGoogleForms(
   const override = (formNameOverride || '').trim();
   const multiple = formIds.length > 1;
 
+  // Use transaction for each form import to prevent partial imports
   for (const formId of formIds) {
-    const gFormRes = await getGoogleFormById(formId);
-    const gForm = gFormRes?.data || gFormRes;
-    const googleTitle = (gForm?.info?.title || '').trim();
-    const fallbackTitle = googleTitle || 'Imported Google Form';
+    try {
+      await getDb().transaction(async (tx) => {
+        const gFormRes = await getGoogleFormById(formId);
+        const gForm = gFormRes?.data || gFormRes;
+        const googleTitle = (gForm?.info?.title || '').trim();
+        const fallbackTitle = googleTitle || 'Imported Google Form';
 
-    let baseForName;
-    if (override) {
-      baseForName = multiple ? `${override} (${fallbackTitle})` : override;
-    } else {
-      baseForName = fallbackTitle;
-    }
-    const name = await uniqueFormName(baseForName);
-
-    const questionDefs = extractGoogleQuestionDefinitions(gForm);
-    const schema = JSON.stringify({
-      source: 'google_forms',
-      googleFormId: formId,
-      userReferenceQuestionId: referenceQuestionId || null,
-      title: googleTitle || name,
-      questionHeaders: questionDefs.map((d) => d.title),
-      questions: questionDefs
-    });
-
-    const [dbForm] = await formService.createForm({
-      name,
-      provider: 'google_forms',
-      baseLink: `https://docs.google.com/forms/d/${formId}/viewform`,
-      externalId: formId,
-      eventId: ev.id,
-      schema
-    });
-
-    // Collect responses first to determine answer types
-    const responseData = await getGoogleFormResponsesById(formId);
-    const responses = responseData?.responses || [];
-
-    const responsesByQuestionDef = {};
-    for (let i = 0; i < questionDefs.length; i++) {
-      responsesByQuestionDef[i] = [];
-    }
-
-    for (const r of responses) {
-      const answersObj = r?.answers || {};
-      const answerEntries = Object.entries(answersObj);
-      const answerValuesByIndex = answerEntries.map(([, value]) => value);
-
-      for (let i = 0; i < questionDefs.length; i++) {
-        const def = questionDefs[i];
-        const answer =
-          def.questionId && answersObj[def.questionId]
-            ? answersObj[def.questionId]
-            : (answerValuesByIndex[i] ?? null);
-
-        if (answer) {
-          responsesByQuestionDef[i].push(answer);
-        }
-      }
-    }
-
-    const questionRows = [];
-    for (let i = 0; i < questionDefs.length; i++) {
-      const def = questionDefs[i];
-      const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
-      const [questionRow] = await questionService.createQuestion({
-        formId: dbForm.id,
-        text: def.title,
-        answerType
-      });
-
-      if (answerType === 'choice' && Array.isArray(def.options) && def.options.length > 0) {
-        await questionService.createQuestionChoices(questionRow.id, def.options);
-      }
-
-      questionRows.push({
-        ...questionRow,
-        googleQuestionId: def.questionId,
-        answerType,
-        questionIndex: i
-      });
-    }
-
-    const referenceQuestion = referenceQuestionId
-      ? questionRows.find((q) => q.googleQuestionId === referenceQuestionId) || null
-      : null;
-
-    // import responses (best-effort)
-    const existingSubs = await submissionService.listSubmissionsByForm(dbForm.id);
-    const existingByExternalId = new Set(existingSubs.map((s) => s.externalId));
-
-    for (const r of responses) {
-      const externalId = pickText(r.responseId || r.response_id || '');
-      if (!externalId) continue;
-      if (existingByExternalId.has(externalId)) continue;
-
-      const answersObj = r?.answers || {};
-      const answerEntries = Object.entries(answersObj);
-      const answerValuesByIndex = answerEntries.map(([, value]) => value);
-      const userReferenceAnswer = referenceQuestion
-        ? referenceQuestion.googleQuestionId
-          ? (answersObj[referenceQuestion.googleQuestionId] ?? null)
-          : (answerValuesByIndex[referenceQuestion.questionIndex] ?? null)
-        : null;
-      const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
-
-      const [sub] = await submissionService.createSubmission({
-        formId: dbForm.id,
-        userReferenceId,
-        submittedAt: parseSubmittedAt(r),
-        externalId
-      });
-
-      for (let i = 0; i < questionRows.length; i++) {
-        const question = questionRows[i];
-        let answer = null;
-
-        if (question.googleQuestionId && answersObj[question.googleQuestionId]) {
-          answer = answersObj[question.googleQuestionId];
+        let baseForName;
+        if (override) {
+          baseForName = multiple ? `${override} (${fallbackTitle})` : override;
         } else {
-          answer = answerValuesByIndex[i] ?? null;
+          baseForName = fallbackTitle;
+        }
+        const name = await uniqueFormName(baseForName);
+
+        const questionDefs = extractGoogleQuestionDefinitions(gForm);
+        const schema = JSON.stringify({
+          source: 'google_forms',
+          googleFormId: formId,
+          userReferenceQuestionId: referenceQuestionId || null,
+          title: googleTitle || name,
+          questionHeaders: questionDefs.map((d) => d.title),
+          questions: questionDefs
+        });
+
+        const [dbForm] = await formService.createForm({
+          name,
+          provider: 'google_forms',
+          baseLink: `https://docs.google.com/forms/d/${formId}/viewform`,
+          externalId: formId,
+          eventId: ev.id,
+          schema
+        });
+
+        // Collect responses first to determine answer types
+        const responseData = await getGoogleFormResponsesById(formId);
+        const responses = responseData?.responses || [];
+
+        const responsesByQuestionDef = {};
+        for (let i = 0; i < questionDefs.length; i++) {
+          responsesByQuestionDef[i] = [];
         }
 
-        const vals = answerToDbValues(answer, question.answerType);
-        await responseService.upsertResponse({
-          submissionId: sub.id,
-          questionId: question.id,
-          ...vals
-        });
-      }
-    }
+        for (const r of responses) {
+          const answersObj = r?.answers || {};
+          const answerEntries = Object.entries(answersObj);
+          const answerValuesByIndex = answerEntries.map(([, value]) => value);
 
-    createdFormIds.push(dbForm.id);
+          for (let i = 0; i < questionDefs.length; i++) {
+            const def = questionDefs[i];
+            const answer =
+              def.questionId && answersObj[def.questionId]
+                ? answersObj[def.questionId]
+                : (answerValuesByIndex[i] ?? null);
+
+            if (answer) {
+              responsesByQuestionDef[i].push(answer);
+            }
+          }
+        }
+
+        const questionRows = [];
+        for (let i = 0; i < questionDefs.length; i++) {
+          const def = questionDefs[i];
+          const answerType = mapGoogleQuestionTypeToAnswerType(def, responsesByQuestionDef[i]);
+          const [questionRow] = await questionService.createQuestion({
+            formId: dbForm.id,
+            text: def.title,
+            answerType
+          });
+
+          if (answerType === 'choice' && Array.isArray(def.options) && def.options.length > 0) {
+            await questionService.createQuestionChoices(questionRow.id, def.options);
+          }
+
+          questionRows.push({
+            ...questionRow,
+            googleQuestionId: def.questionId,
+            answerType,
+            questionIndex: i
+          });
+        }
+
+        const referenceQuestion = referenceQuestionId
+          ? questionRows.find((q) => q.googleQuestionId === referenceQuestionId) || null
+          : null;
+
+        // import responses (best-effort within transaction)
+        const existingSubs = await submissionService.listSubmissionsByForm(dbForm.id);
+        const existingByExternalId = new Set(existingSubs.map((s) => s.externalId));
+
+        for (const r of responses) {
+          const externalId = pickText(r.responseId || r.response_id || '');
+          if (!externalId) continue;
+          if (existingByExternalId.has(externalId)) continue;
+
+          const answersObj = r?.answers || {};
+          const answerEntries = Object.entries(answersObj);
+          const answerValuesByIndex = answerEntries.map(([, value]) => value);
+          const userReferenceAnswer = referenceQuestion
+            ? referenceQuestion.googleQuestionId
+              ? (answersObj[referenceQuestion.googleQuestionId] ?? null)
+              : (answerValuesByIndex[referenceQuestion.questionIndex] ?? null)
+            : null;
+          const userReferenceId = getUserReferenceIdFromAnswer(userReferenceAnswer);
+
+          const [sub] = await submissionService.createSubmission({
+            formId: dbForm.id,
+            userReferenceId,
+            submittedAt: parseSubmittedAt(r),
+            externalId
+          });
+
+          for (let i = 0; i < questionRows.length; i++) {
+            const question = questionRows[i];
+            let answer = null;
+
+            if (question.googleQuestionId && answersObj[question.googleQuestionId]) {
+              answer = answersObj[question.googleQuestionId];
+            } else {
+              answer = answerValuesByIndex[i] ?? null;
+            }
+
+            const vals = answerToDbValues(answer, question.answerType);
+            await responseService.upsertResponse({
+              submissionId: sub.id,
+              questionId: question.id,
+              ...vals
+            });
+          }
+        }
+
+        createdFormIds.push(dbForm.id);
+      });
+    } catch (err) {
+      logger.error(`Failed to import Google Form ${formId}`, err);
+      throw new Error(`Failed to import form: ${err.message}`);
+    }
   }
 
   return { formIds: createdFormIds };

@@ -26,15 +26,38 @@ export default function HelpSettingsAndStartup() {
             )
           },
           {
+            id: 'google-cloud-prerequisites',
+            label: 'Google Cloud Prerequisites',
+            content: (
+              <>
+                <Typography variant="body2" fontWeight={700}>Before using Google features</Typography>
+                <Typography variant="body2">1. Create/select a Google Cloud project.</Typography>
+                <Typography variant="body2">2. Enable Google Forms API and Google Drive API.</Typography>
+                <Typography variant="body2">3. Configure OAuth consent screen and add test users if needed.</Typography>
+                <Typography variant="body2">4. Create OAuth Client ID as Desktop app.</Typography>
+                <Typography variant="body2">5. Download credentials.json from Google Cloud.</Typography>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Use OAuth desktop credentials JSON. Service account JSON is not supported in this flow.
+                </Alert>
+              </>
+            )
+          },
+          {
             id: 'google-setup',
             label: 'Google Auth Setup Steps',
             content: (
-              <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
-                <li><Typography variant="body2">Click Select credentials.json and choose OAuth client file.</Typography></li>
-                <li><Typography variant="body2">Check credential status message for validity.</Typography></li>
-                <li><Typography variant="body2">Click Sign In With Google and complete browser flow.</Typography></li>
-                <li><Typography variant="body2">Use Refresh Google Status to confirm signed in.</Typography></li>
-              </Box>
+              <>
+                <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
+                  <li><Typography variant="body2">Click Select credentials.json and choose OAuth client file.</Typography></li>
+                  <li><Typography variant="body2">Check credential status message for validity.</Typography></li>
+                  <li><Typography variant="body2">Click Sign In With Google and complete browser flow.</Typography></li>
+                  <li><Typography variant="body2">Use Refresh Google Status to confirm signed in.</Typography></li>
+                </Box>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Required OAuth scopes: drive.readonly, forms.body, forms.responses.readonly,
+                  userinfo.profile, openid.
+                </Typography>
+              </>
             )
           },
           {

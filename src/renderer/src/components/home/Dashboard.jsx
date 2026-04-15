@@ -36,6 +36,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import QuestionSelectorDialog from '../analysis/QuestionSelectorDialog';
 import { exportElementAsPng } from '../../common/exportChartImage';
+import { fetchAllPages } from '../../common/pagination';
 
 const CONFIGURABLE_METRIC_NAMES = {
   avgSatisfaction: 'avg_satisfaction',
@@ -170,7 +171,7 @@ export default function Dashboard() {
     setRefreshingAll(true);
     setDashboardError('');
     try {
-      await window.api.forms.list();
+      await fetchAllPages((offset, limit) => window.api.forms.list(offset, limit));
       await loadDashboardData();
     } catch (error) {
       setDashboardError(error?.message || 'Failed to refresh surveys and dashboard data.');
@@ -189,7 +190,7 @@ export default function Dashboard() {
     try {
       const [options, allForms, allEvents] = await Promise.all([
         window.api.statistics.listSelectableSurveyQuestions(metricName),
-        window.api.forms.list(),
+        fetchAllPages((offset, limit) => window.api.forms.list(offset, limit)),
         window.api.events.listWithSurveyCountsAndTags()
       ]);
 
@@ -227,7 +228,7 @@ export default function Dashboard() {
 
       setSelectorSurveys(surveys.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
-      alert(error?.message || 'Failed to load survey/question options.');
+      setDashboardError(error?.message || 'Failed to load survey/question options.');
     } finally {
       setSelectorLoading(false);
     }
@@ -240,12 +241,14 @@ export default function Dashboard() {
 
   async function saveMetricConfig(metricName, surveyId, selectedQuestion) {
     if (!selectedQuestion) {
-      alert('Please choose a question first.');
+      setDashboardError('Please choose a question first.');
       return;
     }
 
     try {
-      const liveQuestions = await window.api.questions.listByForm(Number(surveyId));
+      const liveQuestions = await fetchAllPages((offset, limit) =>
+        window.api.questions.listByForm(Number(surveyId), offset, limit)
+      );
       const selectedQuestionId = Number(selectedQuestion.id);
 
       // Prefer exact ID match; fallback to text+answerType when IDs are stale/mismatched.
@@ -262,14 +265,14 @@ export default function Dashboard() {
       });
 
       if (!resolvedQuestion?.id) {
-        alert('Selected question no longer exists in this survey. Please pick another question.');
+        setDashboardError('Selected question no longer exists in this survey. Please pick another question.');
         return;
       }
 
       await window.api.statistics.setMetricQuestion(metricName, Number(resolvedQuestion.id));
       await loadDashboardData();
     } catch (error) {
-      alert(error?.message || 'Failed to save metric configuration.');
+      setDashboardError(error?.message || 'Failed to save metric configuration.');
     }
   }
 
@@ -288,7 +291,7 @@ export default function Dashboard() {
       setAppointmentsDraft(String(normalizedValue));
       setAppointmentsDialogOpen(false);
     } catch (error) {
-      alert(error?.message || 'Failed to save total appointments.');
+      setDashboardError(error?.message || 'Failed to save total appointments.');
     } finally {
       setAppointmentsSaving(false);
     }
@@ -303,7 +306,7 @@ export default function Dashboard() {
       cachedAppointmentsTotal = normalizedValue;
       setAppointmentsDraft(String(normalizedValue));
     } catch (error) {
-      alert(error?.message || 'Failed to update total appointments.');
+      setDashboardError(error?.message || 'Failed to update total appointments.');
     } finally {
       setAppointmentsSaving(false);
     }
@@ -438,7 +441,7 @@ export default function Dashboard() {
       try {
         await exportElementAsPng(exportPreviewRef.current, title);
       } catch (error) {
-        alert(error?.message || 'Failed to export chart image.');
+        setDashboardError(error?.message || 'Failed to export chart image.');
       } finally {
         setExporting(false);
       }

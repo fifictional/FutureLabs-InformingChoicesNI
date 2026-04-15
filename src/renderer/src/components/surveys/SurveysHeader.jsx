@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Dialog,
   ListItemIcon,
@@ -36,6 +37,7 @@ export default function SurveysHeader(props) {
   const [newSurveyCreationLoading, setNewSurveyCreationLoading] = useState(false);
   const [newSurveyCreationError, setNewSurveyCreationError] = useState(null);
   const [googleFormPickerOpen, setGoogleFormPickerOpen] = useState(false);
+  const [headerError, setHeaderError] = useState('');
 
   const actionsMenuOpened = Boolean(actionsMenuAnchorEl);
   const importMenuOpened = Boolean(importMenuAnchorEl);
@@ -74,9 +76,15 @@ export default function SurveysHeader(props) {
     });
   }
 
-
   return (
-    <Stack direction="row" spacing={2} alignItems="center" mb={1}>
+    <Stack spacing={1} mb={1}>
+      {headerError ? (
+        <Alert severity="warning" onClose={() => setHeaderError('')}>
+          {headerError}
+        </Alert>
+      ) : null}
+
+      <Stack direction="row" spacing={2} alignItems="center">
       <Typography flex={1} variant="h5" fontWeight="bold" mb={3} color="#000000">
         Surveys
       </Typography>
@@ -108,7 +116,7 @@ export default function SurveysHeader(props) {
             } else if (selectedSurveyObject?.baseLink) {
               window.api.googleForms.openInBrowserByBaseLink(selectedSurveyObject.baseLink);
             } else {
-              alert("No link available for this survey.");
+              setHeaderError('No link available for this survey.');
             }
           }}
         >
@@ -212,6 +220,7 @@ export default function SurveysHeader(props) {
           alternateSubtitle="Import Selected"
         />
       </Dialog>
+      </Stack>
     </Stack>
   );
 }

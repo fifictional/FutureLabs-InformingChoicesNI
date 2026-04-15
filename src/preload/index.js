@@ -4,7 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload';
 // APIs for renderer
 const api = {
   events: {
-    list: () => ipcRenderer.invoke('events:list'),
+    list: (offset, limit) => ipcRenderer.invoke('events:list', offset, limit),
     findByName: (name) => ipcRenderer.invoke('events:findByName', name),
     listWithSurveyCountsAndTags: () => ipcRenderer.invoke('events:listWithSurveyCountsAndTags'),
     create: (data) => ipcRenderer.invoke('events:create', data),
@@ -12,42 +12,46 @@ const api = {
     delete: (id) => ipcRenderer.invoke('events:delete', id)
   },
   eventTags: {
-    list: () => ipcRenderer.invoke('eventTags:list'),
+    list: (offset, limit) => ipcRenderer.invoke('eventTags:list', offset, limit),
     findBySlug: (slug) => ipcRenderer.invoke('eventTags:findBySlug', slug),
     create: (data) => ipcRenderer.invoke('eventTags:create', data),
     delete: (id) => ipcRenderer.invoke('eventTags:delete', id),
-    listForEvent: (eventId) => ipcRenderer.invoke('eventTags:listForEvent', eventId),
+    listForEvent: (eventId, offset, limit) =>
+      ipcRenderer.invoke('eventTags:listForEvent', eventId, offset, limit),
     addToEvent: (eventId, tagId) => ipcRenderer.invoke('eventTags:addToEvent', eventId, tagId),
     removeFromEvent: (eventId, tagId) =>
       ipcRenderer.invoke('eventTags:removeFromEvent', eventId, tagId)
   },
   forms: {
-    list: () => ipcRenderer.invoke('forms:list'),
+    list: (offset, limit) => ipcRenderer.invoke('forms:list', offset, limit),
     findById: (id) => ipcRenderer.invoke('forms:findById', id),
-    listWithEventNameAndResponseCount: () =>
-      ipcRenderer.invoke('forms:listWithEventNameAndResponseCount'),
-    listByEvent: (eventId) => ipcRenderer.invoke('forms:listByEvent', eventId),
+    listWithEventNameAndResponseCount: (offset, limit) =>
+      ipcRenderer.invoke('forms:listWithEventNameAndResponseCount', offset, limit),
+    listByEvent: (eventId, offset, limit) =>
+      ipcRenderer.invoke('forms:listByEvent', eventId, offset, limit),
     create: (data) => ipcRenderer.invoke('forms:create', data),
     delete: (id) => ipcRenderer.invoke('forms:delete', id),
     update: (id, data) => ipcRenderer.invoke('forms:update', id, data),
     refreshSchemaAndResponses: (id) => ipcRenderer.invoke('forms:refreshSchemaAndResponses', id)
   },
   questions: {
-    listByForm: (formId) => ipcRenderer.invoke('questions:listByForm', formId),
-    listChoicesByQuestion: (questionId) =>
-      ipcRenderer.invoke('questions:listChoicesByQuestion', questionId),
+    listByForm: (formId, offset, limit) =>
+      ipcRenderer.invoke('questions:listByForm', formId, offset, limit),
+    listChoicesByQuestion: (questionId, offset, limit) =>
+      ipcRenderer.invoke('questions:listChoicesByQuestion', questionId, offset, limit),
     create: (formId) => ipcRenderer.invoke('questions:create', formId),
     delete: (id) => ipcRenderer.invoke('questions:delete', id)
   },
   submissions: {
     countAll: () => ipcRenderer.invoke('submissions:countAll'),
-    listByForm: (formId) => ipcRenderer.invoke('submissions:listByForm', formId),
+    listByForm: (formId, offset, limit) =>
+      ipcRenderer.invoke('submissions:listByForm', formId, offset, limit),
     create: (data) => ipcRenderer.invoke('submissions:create', data),
     delete: (id) => ipcRenderer.invoke('submissions:delete', id)
   },
   responses: {
-    listBySubmission: (submissionId) =>
-      ipcRenderer.invoke('responses:listBySubmission', submissionId),
+    listBySubmission: (submissionId, offset, limit) =>
+      ipcRenderer.invoke('responses:listBySubmission', submissionId, offset, limit),
     upsert: (data) => ipcRenderer.invoke('responses:upsert', data),
     delete: (id) => ipcRenderer.invoke('responses:delete', id)
   },
@@ -61,7 +65,7 @@ const api = {
       ipcRenderer.invoke('statistics:getDashboardOverviewData', filters)
   },
   clients: {
-    list: () => ipcRenderer.invoke('clients:list'),
+    list: (offset, limit) => ipcRenderer.invoke('clients:list', offset, limit),
     create: (data) => ipcRenderer.invoke('clients:create', data),
     update: (id, data) => ipcRenderer.invoke('clients:update', id, data),
     delete: (id) => ipcRenderer.invoke('clients:delete', id),
@@ -70,7 +74,7 @@ const api = {
     adjustTotalAppointments: (delta) => ipcRenderer.invoke('clients:adjustTotalAppointments', delta)
   },
   charts: {
-    list: () => ipcRenderer.invoke('charts:list'),
+    list: (offset, limit) => ipcRenderer.invoke('charts:list', offset, limit),
     findById: (id) => ipcRenderer.invoke('charts:findById', id),
     create: (data) => ipcRenderer.invoke('charts:create', data),
     update: (id, data) => ipcRenderer.invoke('charts:update', id, data),

@@ -4,9 +4,9 @@
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1743724800000,
-      "tag": "0000_initial_mysql_schema",
+      "version": "5",
+      "when": 1776266645362,
+      "tag": "0000_violet_karnak",
       "breakpoints": true
     }
   ]

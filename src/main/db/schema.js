@@ -6,6 +6,7 @@ import {
   double,
   datetime,
   uniqueIndex,
+  index,
   mysqlEnum
 } from 'drizzle-orm/mysql-core';
 
@@ -37,26 +38,34 @@ export const eventTagMappings = mysqlTable(
   (table) => [uniqueIndex('unique_event_tag_mapping').on(table.eventId, table.tagId)]
 );
 
-export const forms = mysqlTable('forms', {
-  id: int('id').autoincrement().primaryKey(),
-  name: varchar('name', { length: 255 }).notNull().unique(),
-  provider: mysqlEnum('provider', ['google_forms', 'file']).notNull(),
-  baseLink: text('base_link'),
-  externalId: varchar('external_id', { length: 255 }),
-  eventId: int('event_id')
-    .notNull()
-    .references(() => events.id, { onDelete: 'cascade' }),
-  schema: text('schema')
-});
+export const forms = mysqlTable(
+  'forms',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    name: varchar('name', { length: 255 }).notNull().unique(),
+    provider: mysqlEnum('provider', ['google_forms', 'file']).notNull(),
+    baseLink: text('base_link'),
+    externalId: varchar('external_id', { length: 255 }),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    schema: text('schema')
+  },
+  (table) => [index('idx_forms_event_id').on(table.eventId)]
+);
 
-export const questions = mysqlTable('questions', {
-  id: int('id').autoincrement().primaryKey(),
-  text: text('text').notNull(),
-  answerType: mysqlEnum('answer_type', ['text', 'number', 'choice']).notNull(),
-  formId: int('form_id')
-    .notNull()
-    .references(() => forms.id, { onDelete: 'cascade' })
-});
+export const questions = mysqlTable(
+  'questions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    text: text('text').notNull(),
+    answerType: mysqlEnum('answer_type', ['text', 'number', 'choice']).notNull(),
+    formId: int('form_id')
+      .notNull()
+      .references(() => forms.id, { onDelete: 'cascade' })
+  },
+  (table) => [index('idx_questions_form_id').on(table.formId)]
+);
 
 export const submissions = mysqlTable(
   'submissions',
@@ -69,7 +78,10 @@ export const submissions = mysqlTable(
     submittedAt: datetime('submitted_at').notNull(),
     externalId: varchar('external_id', { length: 255 }).notNull()
   },
-  (table) => [uniqueIndex('unique_submission_per_form').on(table.formId, table.externalId)]
+  (table) => [
+    uniqueIndex('unique_submission_per_form').on(table.formId, table.externalId),
+    index('idx_submissions_form_id').on(table.formId)
+  ]
 );
 
 export const responses = mysqlTable(
@@ -90,15 +102,24 @@ export const responses = mysqlTable(
     uniqueIndex('unique_response_per_question_and_submission').on(
       table.submissionId,
       table.questionId
-    )
+    ),
+    index('idx_responses_submission_id').on(table.submissionId),
+    index('idx_responses_question_id').on(table.questionId),
+    index('idx_responses_submission_question').on(table.submissionId, table.questionId)
   ]
 );
 
-export const questionChoice = mysqlTable('question_choice', {
-  id: int('id').autoincrement().primaryKey(),
-  questionId: int('question_id'),
-  choiceText: varchar('choice_text', { length: 500 }).notNull()
-});
+export const questionChoice = mysqlTable(
+  'question_choice',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    questionId: int('question_id')
+      .notNull()
+      .references(() => questions.id, { onDelete: 'cascade' }),
+    choiceText: varchar('choice_text', { length: 500 }).notNull()
+  },
+  (table) => [index('idx_question_choice_question_id').on(table.questionId)]
+);
 
 export const clients = mysqlTable('clients', {
   id: int('id').autoincrement().primaryKey(),
@@ -115,12 +136,16 @@ export const appSettings = mysqlTable('app_settings', {
   updatedAt: datetime('updated_at').notNull()
 });
 
-export const statisticOverviews = mysqlTable('statistic_overviews', {
-  id: int('id').autoincrement().primaryKey(),
-  name: varchar('name', { length: 255 }).notNull().unique(),
-  defaultQuestion: varchar('default_question', { length: 500 }).notNull(),
-  questionId: int('question_id').references(() => questions.id, { onDelete: 'set null' })
-});
+export const statisticOverviews = mysqlTable(
+  'statistic_overviews',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    name: varchar('name', { length: 255 }).notNull().unique(),
+    defaultQuestion: varchar('default_question', { length: 500 }).notNull(),
+    questionId: int('question_id').references(() => questions.id, { onDelete: 'set null' })
+  },
+  (table) => [index('idx_statistic_overviews_question_id').on(table.questionId)]
+);
 
 export const charts = mysqlTable('charts', {
   id: int('id').autoincrement().primaryKey(),

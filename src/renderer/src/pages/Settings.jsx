@@ -17,6 +17,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Link,
   Typography
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -44,6 +45,8 @@ export default function Settings() {
   const [signingOut, setSigningOut] = useState(false);
   const [passwordHelpOpen, setPasswordHelpOpen] = useState(false);
   const [passwordHelpPlatform, setPasswordHelpPlatform] = useState('windows');
+  const [googleHelpOpen, setGoogleHelpOpen] = useState(false);
+  const [googleHelpStep, setGoogleHelpStep] = useState('project');
 
   useEffect(() => {
     async function loadSettings() {
@@ -256,6 +259,77 @@ export default function Settings() {
             Configure Google account access for Google Forms features.
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Use an OAuth 2.0 Desktop App credential JSON from Google Cloud. Service account keys are not
+            supported for the interactive sign-in flow used by this app.
+          </Alert>
+
+          <Box
+            sx={{
+              mb: 3,
+              p: 2,
+              borderRadius: 2,
+              border: (theme) => `1px solid ${theme.palette.divider}`,
+              bgcolor: 'background.paper'
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Google Cloud Setup (Required)
+            </Typography>
+            <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
+              <li>
+                <Typography variant="body2">
+                  In Google Cloud Console, create or select a project for this app.
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  Enable APIs: Google Forms API and Google Drive API.
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  Configure OAuth consent screen (Internal or External), set app details, and add test users
+                  if your app is still in testing mode.
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  Create OAuth Client ID with application type <strong>Desktop app</strong> and download
+                  credentials.json.
+                </Typography>
+              </li>
+              <li>
+                <Typography variant="body2">
+                  In this page, click <strong>Select credentials.json</strong>, choose the downloaded file,
+                  then click <strong>Sign In With Google</strong>.
+                </Typography>
+              </li>
+            </Box>
+
+            <Typography variant="body2" fontWeight={700} sx={{ mt: 1.5, mb: 0.75 }}>
+              OAuth scopes requested by the app
+            </Typography>
+            <Box
+              component="pre"
+              sx={{
+                m: 0,
+                p: 1.5,
+                borderRadius: 1,
+                bgcolor: 'grey.100',
+                overflowX: 'auto',
+                fontFamily: 'Consolas, monospace',
+                fontSize: 13
+              }}
+            >
+              {`https://www.googleapis.com/auth/drive.readonly
+https://www.googleapis.com/auth/forms.body
+https://www.googleapis.com/auth/forms.responses.readonly
+https://www.googleapis.com/auth/userinfo.profile
+openid`}
+            </Box>
+          </Box>
+
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1.5}
@@ -266,25 +340,30 @@ export default function Settings() {
             <Typography variant="subtitle1" fontWeight={700}>
               Google Authentication Status
             </Typography>
-            <Chip
-              label={
-                googleLoading
-                  ? 'Checking...'
-                  : googleSettings?.authenticated
-                    ? 'Signed In'
+            <Stack direction="row" spacing={1}>
+              <Button size="small" variant="outlined" onClick={() => setGoogleHelpOpen(true)}>
+                How to set up Google Auth
+              </Button>
+              <Chip
+                label={
+                  googleLoading
+                    ? 'Checking...'
+                    : googleSettings?.authenticated
+                      ? 'Signed In'
+                      : googleSettings?.credentialStatus?.valid
+                        ? 'Needs Sign-In'
+                        : 'Not Configured'
+                }
+                color={
+                  googleSettings?.authenticated
+                    ? 'success'
                     : googleSettings?.credentialStatus?.valid
-                      ? 'Needs Sign-In'
-                      : 'Not Configured'
-              }
-              color={
-                googleSettings?.authenticated
-                  ? 'success'
-                  : googleSettings?.credentialStatus?.valid
-                    ? 'warning'
-                    : 'default'
-              }
-              size="small"
-            />
+                      ? 'warning'
+                      : 'default'
+                }
+                size="small"
+              />
+            </Stack>
           </Stack>
 
           {googleSettings && (
@@ -771,6 +850,172 @@ source ~/.zshrc`}
         </DialogContent>
         <DialogActions>
           <Button variant="outlined" onClick={() => setPasswordHelpOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={googleHelpOpen} onClose={() => setGoogleHelpOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Set Up Google Authentication</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2">
+              Follow these steps once to connect this app with Google Forms and Drive for imports and form
+              operations.
+            </Typography>
+
+            <Tabs
+              value={googleHelpStep}
+              onChange={(_event, nextValue) => setGoogleHelpStep(nextValue)}
+              variant="scrollable"
+              allowScrollButtonsMobile
+            >
+              <Tab value="project" label="Step 1: Project" />
+              <Tab value="apis" label="Step 2: APIs" />
+              <Tab value="oauth" label="Step 3: OAuth" />
+              <Tab value="app" label="Step 4: In App" />
+            </Tabs>
+
+            {googleHelpStep === 'project' && (
+              <Stack spacing={1.25}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Create Google Cloud project
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  1. Open Google Cloud Console.
+                </Typography>
+                <Link href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">
+                  https://console.cloud.google.com/
+                </Link>
+                <Typography variant="body2" color="text.secondary">
+                  2. Click project selector (top bar) and choose New Project.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  3. Enter project name, organization/location (if applicable), then click Create.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  4. Confirm this project is selected before configuring APIs and OAuth.
+                </Typography>
+              </Stack>
+            )}
+
+            {googleHelpStep === 'apis' && (
+              <Stack spacing={1.25}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Enable required APIs
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Enable both APIs in your project from API Library:
+                </Typography>
+                <Link
+                  href="https://console.cloud.google.com/apis/library"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  https://console.cloud.google.com/apis/library
+                </Link>
+                <Typography variant="body2" color="text.secondary">
+                  - Google Forms API
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  - Google Drive API
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Without these APIs, sign-in can succeed but Forms/Drive operations will fail.
+                </Typography>
+              </Stack>
+            )}
+
+            {googleHelpStep === 'oauth' && (
+              <Stack spacing={1.25}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Configure OAuth consent and credentials
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  1. Open OAuth consent screen.
+                </Typography>
+                <Link
+                  href="https://console.cloud.google.com/apis/credentials/consent"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  https://console.cloud.google.com/apis/credentials/consent
+                </Link>
+                <Typography variant="body2" color="text.secondary">
+                  2. Choose Audience:
+                  Internal for Google Workspace org users only, or External for broader users.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  3. Complete app details (name, support email, developer contact email).
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  4. In Data Access, click Add or Remove Scopes and include:
+                  drive.readonly, forms.body, forms.responses.readonly, userinfo.profile, openid.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  5. If Audience is External and app is Testing, add all intended accounts under Test users.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  6. Open Credentials and create OAuth Client ID with application type Desktop app,
+                  then download credentials.json.
+                </Typography>
+                <Link
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  https://console.cloud.google.com/apis/credentials
+                </Link>
+                <Alert severity="warning">
+                  Use OAuth desktop credentials JSON. Service account keys are not supported in this sign-in flow.
+                </Alert>
+              </Stack>
+            )}
+
+            {googleHelpStep === 'app' && (
+              <Stack spacing={1.25}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Complete setup in this app
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  1. Click Select credentials.json and choose the file you downloaded.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  2. Wait for credential validation status.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  3. Click Sign In With Google and complete browser consent.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  4. Click Refresh Google Status and confirm Signed In.
+                </Typography>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ pt: 0.5 }}>
+                  Required scopes
+                </Typography>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: 'grey.100',
+                    overflowX: 'auto',
+                    fontFamily: 'Consolas, monospace',
+                    fontSize: 13
+                  }}
+                >
+                  {`https://www.googleapis.com/auth/drive.readonly
+https://www.googleapis.com/auth/forms.body
+https://www.googleapis.com/auth/forms.responses.readonly
+https://www.googleapis.com/auth/userinfo.profile
+openid`}
+                </Box>
+              </Stack>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setGoogleHelpOpen(false)}>
             Close
           </Button>
         </DialogActions>

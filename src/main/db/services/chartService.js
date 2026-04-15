@@ -6,6 +6,16 @@ export async function listCharts() {
   return getDb().select().from(charts).orderBy(asc(charts.displayOrder), asc(charts.id));
 }
 
+export async function listChartsPaginated(offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(charts).orderBy(asc(charts.displayOrder), asc(charts.id));
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
+}
+
 export async function findChartById(id) {
   const result = await getDb().select().from(charts).where(eq(charts.id, id)).limit(1);
   return result.length > 0 ? result[0] : null;
@@ -73,8 +83,15 @@ export async function reorderCharts(chartIds) {
 }
 
 export async function parseChartConfiguration(chart) {
-  return {
-    ...chart,
-    configuration: JSON.parse(chart.configuration)
-  };
+  try {
+    return {
+      ...chart,
+      configuration:
+        typeof chart.configuration === 'string'
+          ? JSON.parse(chart.configuration)
+          : chart.configuration
+    };
+  } catch (err) {
+    throw new Error(`Invalid chart configuration for chart "${chart.name}": ${err.message}`);
+  }
 }

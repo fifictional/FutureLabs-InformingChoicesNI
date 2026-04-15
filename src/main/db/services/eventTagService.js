@@ -6,6 +6,16 @@ export async function listEventTags() {
   return getDb().select().from(eventTags);
 }
 
+export async function listEventTagsPaginated(offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(eventTags);
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
+}
+
 export async function findEventTagBySlug(slug) {
   const [row] = await getDb().select().from(eventTags).where(eq(eventTags.slug, slug)).limit(1);
   return row ?? null;
@@ -32,6 +42,21 @@ export async function listEventTagsForEvent(eventId) {
     .from(eventTagMappings)
     .innerJoin(eventTags, eq(eventTagMappings.tagId, eventTags.id))
     .where(eq(eventTagMappings.eventId, eventId));
+}
+
+export async function listEventTagsForEventPaginated(eventId, offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb()
+    .select({ id: eventTags.id, name: eventTags.name, slug: eventTags.slug })
+    .from(eventTagMappings)
+    .innerJoin(eventTags, eq(eventTagMappings.tagId, eventTags.id))
+    .where(eq(eventTagMappings.eventId, eventId));
+
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
 }
 
 export async function addTagToEvent(eventId, tagId) {

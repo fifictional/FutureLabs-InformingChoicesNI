@@ -16,11 +16,14 @@ extraResources:
     to: drizzle
 win:
   executableName: informing-choices
+  signAndEditExecutable: false
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  oneClick: false
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  allowToChangeInstallationDirectory: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

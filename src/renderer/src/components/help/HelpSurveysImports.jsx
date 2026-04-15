@@ -13,6 +13,18 @@ export default function HelpSurveysImports() {
         intro="Use the left menu to open detailed import/playbook instructions."
         sections={[
           {
+            id: 'google-cloud-setup',
+            label: 'Google Cloud Setup Prerequisite',
+            content: (
+              <>
+                <Typography variant="body2">Google Forms import requires OAuth credentials configured in Settings first.</Typography>
+                <Typography variant="body2">Enable Google Forms API and Google Drive API in your Google Cloud project.</Typography>
+                <Typography variant="body2">Create OAuth Client ID of type Desktop app and use the downloaded credentials.json file.</Typography>
+                <Typography variant="body2">Required scopes: drive.readonly, forms.body, forms.responses.readonly, userinfo.profile, openid.</Typography>
+              </>
+            )
+          },
+          {
             id: 'surveys-page',
             label: 'Surveys Page Actions',
             content: (

@@ -6,6 +6,16 @@ export async function listQuestionsByForm(formId) {
   return getDb().select().from(questions).where(eq(questions.formId, formId));
 }
 
+export async function listQuestionsByFormPaginated(formId, offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb().select().from(questions).where(eq(questions.formId, formId));
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
+}
+
 export async function createQuestion(data) {
   const db = getDb();
   const payload =
@@ -27,6 +37,19 @@ export async function createQuestion(data) {
 
 export async function listQuestionChoicesByQuestion(questionId) {
   return getDb().select().from(questionChoice).where(eq(questionChoice.questionId, questionId));
+}
+
+export async function listQuestionChoicesByQuestionPaginated(questionId, offset = 0, limit = null) {
+  const safeLimit = limit == null ? null : Math.min(1000, Math.max(1, Number(limit) || 100));
+  const query = getDb()
+    .select()
+    .from(questionChoice)
+    .where(eq(questionChoice.questionId, questionId));
+  if (safeLimit == null) {
+    return query;
+  }
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  return query.limit(safeLimit).offset(safeOffset);
 }
 
 export async function createQuestionChoices(questionId, choices) {
